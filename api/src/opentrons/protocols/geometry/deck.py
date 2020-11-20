@@ -267,7 +267,7 @@ class Deck(UserDict):
             if isinstance(i, ThermocyclerGeometry):
                 return i.covered_slots
             elif i is not None:
-                return set([sk])
+                return {sk}
             else:
                 return set([])
 
