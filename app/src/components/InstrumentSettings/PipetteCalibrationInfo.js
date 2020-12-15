@@ -122,7 +122,7 @@ export function PipetteCalibrationInfo(props: Props): React.Node {
     setCalBlockModalState,
   ] = React.useState<CalBlockModalState>(CAL_BLOCK_MODAL_CLOSED)
 
-  const startPipetteOffsetPossibleTLC = (
+  const startPipetteOffsetWithTLC = (
     hasBlockModalResponse?: boolean | null = null
   ) => {
     if (hasBlockModalResponse === null && configHasCalibrationBlock === null) {
@@ -223,7 +223,7 @@ export function PipetteCalibrationInfo(props: Props): React.Node {
                 startPipetteOffsetCalibration({
                   withIntent: INTENT_PIPETTE_OFFSET,
                 })
-            : () => startPipetteOffsetPossibleTLC()
+            : () => startPipetteOffsetWithTLC()
         }
         disabled={disabledReason}
         width="15rem"
@@ -266,7 +266,7 @@ export function PipetteCalibrationInfo(props: Props): React.Node {
           <SecondaryBtn
             {...tlcTargetProps}
             title="recalibrateTipButton"
-            onClick={() => startPipetteOffsetPossibleTLC()}
+            onClick={() => startPipetteOffsetWithTLC()}
             disabled={disabledReason}
             width="15rem"
             paddingX={SPACING_2}
@@ -295,7 +295,7 @@ export function PipetteCalibrationInfo(props: Props): React.Node {
         <Portal level="top">
           <AskForCalibrationBlockModal
             onResponse={hasBlockModalResponse =>
-              startPipetteOffsetPossibleTLC(hasBlockModalResponse)
+              startPipetteOffsetWithTLC(hasBlockModalResponse)
             }
             titleBarTitle={PIPETTE_OFFSET_CALIBRATION}
             closePrompt={() => setCalBlockModalState(CAL_BLOCK_MODAL_CLOSED)}
