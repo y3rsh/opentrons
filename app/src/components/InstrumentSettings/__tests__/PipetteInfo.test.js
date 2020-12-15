@@ -111,7 +111,7 @@ describe('PipetteInfo', () => {
     expect(startWizard).toHaveBeenCalledWith({ withIntent: 'pipette-offset' })
   })
 
-  it('launch POC w/ cal block modal denied if POC button clicked and no existing data and no cal block pref saved', () => {
+  it('launch POWT w/ cal block modal denied if POC button clicked and no existing data and no cal block pref saved', () => {
     const { wrapper } = render()
     expect(wrapper.find('AskForCalibrationBlockModal').exists()).toBe(false)
     wrapper.find('button[title="pipetteOffsetCalButton"]').invoke('onClick')()
@@ -123,9 +123,9 @@ describe('PipetteInfo', () => {
     expect(startWizard).toHaveBeenCalledWith({
       overrideParams: {
         hasCalibrationBlock: true,
-        shouldRecalibrateTipLength: false,
+        shouldRecalibrateTipLength: true,
       },
-      withIntent: 'pipette-offset',
+      withIntent: 'tip-length-no-protocol',
     })
   })
 
@@ -139,9 +139,9 @@ describe('PipetteInfo', () => {
     expect(startWizard).toHaveBeenCalledWith({
       overrideParams: {
         hasCalibrationBlock: false,
-        shouldRecalibrateTipLength: false,
+        shouldRecalibrateTipLength: true,
       },
-      withIntent: 'pipette-offset',
+      withIntent: 'tip-length-no-protocol',
     })
   })
 
