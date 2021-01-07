@@ -2,6 +2,7 @@
 import asyncio
 import logging
 from enum import Enum
+from math import isclose
 from typing import Dict, Any, Optional, List, Mapping, Tuple
 
 from .types import CriticalPoint, MotionChecks, OutOfBoundsMove, Axis
@@ -69,7 +70,8 @@ def check_motion_bounds(
         'Out of bounds move: {axis}=({tsp} motor controller, {tdp} deck) too '
         '{dir} for limit {limsp}')
     for ax in target_smoothie.keys():
-        if target_smoothie[ax] < bounds[ax][0]:
+        if not isclose(target_smoothie[ax], bounds[ax][0]) and \
+                target_smoothie[ax] < bounds[ax][0]:
             bounds_message = bounds_message_format.format(
                 axis=ax,
                 tsp=target_smoothie[ax],
@@ -80,7 +82,8 @@ def check_motion_bounds(
             mod_log.warning(bounds_message)
             if checks.value & MotionChecks.LOW.value:
                 raise OutOfBoundsMove(bounds_message)
-        elif target_smoothie[ax] > bounds[ax][1]:
+        elif not isclose(target_smoothie[ax], bounds[ax][1]) and \
+                target_smoothie[ax] > bounds[ax][1]:
             bounds_message = bounds_message_format.format(
                 axis=ax,
                 tsp=target_smoothie[ax],
