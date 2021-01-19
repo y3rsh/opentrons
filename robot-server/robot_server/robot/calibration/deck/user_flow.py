@@ -14,6 +14,7 @@ from opentrons.hardware_control import ThreadManager, CriticalPoint
 from opentrons.hardware_control.pipette import Pipette
 from opentrons.protocol_api import labware
 from opentrons.protocols.geometry.deck import Deck
+from opentrons.protocols.api_support.constants import OPENTRONS_NAMESPACE
 from opentrons.types import Mount, Point, Location
 from opentrons.util import linal
 
@@ -78,7 +79,8 @@ class DeckCalibrationUserFlow:
         deck_load_name = SHORT_TRASH_DECK if ff.short_fixed_trash() \
             else STANDARD_DECK
         self._deck = Deck(load_name=deck_load_name)
-        self._tip_rack = self._get_tip_rack_lw()
+        self._using_non_opentrons_tiprack, self._tip_rack \
+            = self._get_tip_rack_lw()
         self._deck[TIP_RACK_SLOT] = self._tip_rack
 
         self._current_state = State.sessionStarted
@@ -201,14 +203,16 @@ class DeckCalibrationUserFlow:
 
     def _get_tip_rack_lw(
             self, tiprack_definition: Optional['LabwareDefinition'] = None
-            ) -> labware.Labware:
+            ) -> Tuple[bool, labware.Labware]:
         if tiprack_definition:
-            return labware.load_from_definition(
+            is_non_opentrons_tiprack = \
+                tiprack_definition.get('namespace') is not OPENTRONS_NAMESPACE
+            return is_non_opentrons_tiprack, labware.load_from_definition(
                 tiprack_definition, self._deck.position_for(TIP_RACK_SLOT))
         else:
             pip_vol = self._hw_pipette.config.max_volume
             lw_load_name = TIP_RACK_LOOKUP_BY_MAX_VOL[str(pip_vol)].load_name
-            return labware.load(
+            return False, labware.load(
                 lw_load_name, self._deck.position_for(TIP_RACK_SLOT))
 
     def _get_default_tipracks(self):
@@ -260,8 +264,8 @@ class DeckCalibrationUserFlow:
         self._supported_commands.loadLabware = False
         if tiprackDefinition:
             verified_definition = labware.verify_definition(tiprackDefinition)
-            self._tip_rack = self._get_tip_rack_lw(
-                verified_definition)
+            self._using_non_opentrons_tiprack, self._tip_rack \
+                = self._get_tip_rack_lw(verified_definition)
             if self._deck[TIP_RACK_SLOT]:
                 del self._deck[TIP_RACK_SLOT]
             self._deck[TIP_RACK_SLOT] = self._tip_rack
@@ -335,10 +339,13 @@ class DeckCalibrationUserFlow:
                 ''
             ).tip_length
         except TipLengthCalNotFound:
+            tip_length = self._tip_rack.tip_length
+            if self._using_non_opentrons_tiprack:
+                # ignore tip overlap value for custom tiprack definitions
+                return tip_length
             tip_overlap = self._hw_pipette.config.tip_overlap.get(
                 self._tip_rack.uri,
                 self._hw_pipette.config.tip_overlap['default'])
-            tip_length = self._tip_rack.tip_length
             return tip_length - tip_overlap
 
     async def pick_up_tip(self):
