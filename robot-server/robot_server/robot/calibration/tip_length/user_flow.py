@@ -6,6 +6,7 @@ from opentrons.types import Mount, Point, Location
 from opentrons.config import feature_flags as ff
 from opentrons.hardware_control import ThreadManager, CriticalPoint, Pipette
 from opentrons.protocol_api import labware
+from opentrons.protocols.api_support.constants import OPENTRONS_NAMESPACE
 from opentrons.protocols.geometry.deck import Deck
 
 from robot_server.robot.calibration import util
@@ -65,6 +66,8 @@ class TipCalibrationUserFlow:
             else STANDARD_DECK
         self._deck = Deck(load_name=deck_load_name)
         self._tip_rack = self._get_tip_rack_lw(tip_rack)
+        self._use_custom_tip_rack = \
+            tip_rack.get('namespace') is not OPENTRONS_NAMESPACE
         self._initialize_deck()
 
         self._current_state = State.sessionStarted
@@ -192,11 +195,15 @@ class TipCalibrationUserFlow:
     def _get_default_tip_length(self) -> float:
         tiprack: labware.Labware = self._deck[TIP_RACK_SLOT]  # type: ignore
         full_length = tiprack.tip_length
-        overlap_dict: Dict = \
-            self._hw_pipette.config.tip_overlap
-        default = overlap_dict['default']
-        overlap = overlap_dict.get(tiprack.uri, default)
-        return full_length - overlap
+        if self._use_custom_tip_rack:
+            # ignore tip overlap value for custom tiprack definitions
+            return full_length
+        else:
+            overlap_dict: Dict = \
+                self._hw_pipette.config.tip_overlap
+            default = overlap_dict['default']
+            overlap = overlap_dict.get(tiprack.uri, default)
+            return full_length - overlap
 
     @property
     def critical_point_override(self) -> Optional[CriticalPoint]:
