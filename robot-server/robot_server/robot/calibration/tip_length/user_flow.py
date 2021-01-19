@@ -66,7 +66,7 @@ class TipCalibrationUserFlow:
             else STANDARD_DECK
         self._deck = Deck(load_name=deck_load_name)
         self._tip_rack = self._get_tip_rack_lw(tip_rack)
-        self._use_custom_tip_rack = \
+        self._use_non_opentrons_tip_rack = \
             tip_rack.get('namespace') is not OPENTRONS_NAMESPACE
         self._initialize_deck()
 
@@ -195,7 +195,7 @@ class TipCalibrationUserFlow:
     def _get_default_tip_length(self) -> float:
         tiprack: labware.Labware = self._deck[TIP_RACK_SLOT]  # type: ignore
         full_length = tiprack.tip_length
-        if self._use_custom_tip_rack:
+        if self._use_non_opentrons_tip_rack:
             # ignore tip overlap value for custom tiprack definitions
             return full_length
         else:
