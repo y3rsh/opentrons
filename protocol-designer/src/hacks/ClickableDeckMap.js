@@ -47,6 +47,9 @@ export function ClickableDeckMap(props: ClickableDeckMapProps): React.Node {
           const slotId = `${location.slot}`
           const slotDef = deckSlotsById[slotId]
           const slotOrigin = slotDef.position
+          const labwareHighlight = highlights.some(
+            h => h.labwareId === labware_id && !h.wellName
+          )
 
           return (
             <g
@@ -58,6 +61,15 @@ export function ClickableDeckMap(props: ClickableDeckMapProps): React.Node {
                 }
               }}
             >
+              {labwareHighlight && (
+                <rect
+                  width={slotDef.boundingBox.xDimension}
+                  height={slotDef.boundingBox.yDimension}
+                  fill={C_BLUE}
+                  rx="4"
+                  ry="4"
+                />
+              )}
               <LabwareRender
                 definition={definition}
                 selectedWells={

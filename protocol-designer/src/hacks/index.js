@@ -80,29 +80,17 @@ export function HackApp(): React.Node {
     const command = commands.find(c => c.command_id === commandId)
 
     const labwareId =
+      // $FlowFixMe: this is safe but flow doesn't like it
       command?.request.labwareId ?? command?.result?.labwareId ?? null
 
+    // $FlowFixMe: this is safe but flow doesn't like it
     const wellName = command?.request.wellName ?? null
 
     setHighlights([{ commandId, labwareId, wellName }])
   }
 
   const handleWellClick = (labwareId, wellName) => {
-    setHighlights(
-      commands
-        .filter(
-          c =>
-            c.request.labwareId &&
-            c.request.wellName &&
-            c.request.labwareId === labwareId &&
-            c.request.wellName === wellName
-        )
-        .map(c => ({
-          commandId: c.command_id,
-          labwareId,
-          wellName,
-        }))
-    )
+    console.log(labwareId, wellName)
   }
 
   return (
