@@ -12,6 +12,7 @@ from opentrons.types import Mount, Point, Location
 from opentrons.hardware_control import (
     ThreadManager, CriticalPoint, Pipette, robot_calibration, util)
 from opentrons.protocol_api import labware
+from opentrons.protocols.api_support.constants import OPENTRONS_NAMESPACE
 from opentrons.config import feature_flags as ff
 from opentrons.protocols.geometry.deck import Deck
 
@@ -87,6 +88,7 @@ class CheckCalibrationUserFlow:
         self._check_valid_calibrations()
 
         self._tip_racks: Optional[List['LabwareDefinition']] = tip_rack_defs
+        MODULE_LOG.info(f'self._tip_racks: {self._tip_racks}')
         self._active_pipette, self._pip_info = self._select_starting_pipette()
 
         self._has_calibration_block = has_calibration_block
@@ -311,13 +313,18 @@ class CheckCalibrationUserFlow:
             return None
         details = helpers.details_from_uri(pip_offset.uri)
         position = self._deck.position_for(TIPRACK_SLOT)
-        tiprack = labware.load(load_name=details.load_name,
-                               namespace=details.namespace,
-                               version=details.version,
-                               parent=position)
+        if details.namespace == OPENTRONS_NAMESPACE:
+            tiprack = labware.load(load_name=details.load_name,
+                                   namespace=details.namespace,
+                                   version=details.version,
+                                   parent=position)
+            tiprack_def = tiprack._implementation.get_definition()
+        else:
+            tiprack_def = get.get_custom_tiprack_definition_for_tlc(
+                pip_offset.uri)
         return get.load_tip_length_calibration(
             pipette.pipette_id,
-            tiprack._implementation.get_definition(),
+            tiprack_def,
             '')
 
     def _check_valid_calibrations(self):
@@ -402,6 +409,12 @@ class CheckCalibrationUserFlow:
             try:
                 details \
                      = helpers.details_from_uri(existing_calibration.uri)
+                if not details.namespace == OPENTRONS_NAMESPACE:
+                    tiprack_def = get.get_custom_tiprack_definition_for_tlc(
+                        existing_calibration.uri)
+                    return labware.load_from_definition(
+                        definition=tiprack_def,
+                        parent=position)
                 return labware.load(load_name=details.load_name,
                                     namespace=details.namespace,
                                     version=details.version,
@@ -436,7 +449,7 @@ class CheckCalibrationUserFlow:
                 tiprack_vol = self._get_volume_from_tiprack_def(rack_def)
                 if volume == tiprack_vol:
                     tip_rack_def = rack_def
-
+        MODULE_LOG.info('what is the tiprack def: {tiprack_def}')
         return self._get_tr_lw(
             tip_rack_def, existing_calibration,
             volume, self._deck.position_for(TIPRACK_SLOT))
