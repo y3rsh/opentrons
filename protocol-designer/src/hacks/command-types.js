@@ -1,5 +1,7 @@
 // @flow
 
+import type { LabwareLocation, LabwareDefinition } from './labware-types'
+
 // generic models
 
 export type PendingCommand<CommandT: string, ReqT> = {|
@@ -43,6 +45,29 @@ export type GenericCommand<CommandT: string, ReqT, ResT> =
   | CompletedCommand<CommandT, ReqT, ResT>
   | FailedCommand<CommandT, ReqT>
 
+// load labware
+
+export type LoadLabwareCommandType = 'loadLabware'
+
+export type LoadLabwareRequest = {|
+  location: LabwareLocation,
+  loadName: string,
+  namespace: string,
+  version: number,
+|}
+
+export type LoadLabwareResult = {|
+  labwareId: string,
+  definition: LabwareDefinition,
+  calibration: [number, number, number],
+|}
+
+export type LoadLabwareCommand = GenericCommand<
+  LoadLabwareCommandType,
+  LoadLabwareRequest,
+  LoadLabwareResult
+>
+
 // move to well
 
 export type MoveToWellCommandType = 'moveToWell'
@@ -62,4 +87,4 @@ export type MoveToWellCommand = GenericCommand<
 >
 
 // all commands union
-export type Command = MoveToWellCommand
+export type Command = LoadLabwareCommand | MoveToWellCommand

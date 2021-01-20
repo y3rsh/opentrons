@@ -1,34 +1,30 @@
 // @flow
 import * as React from 'react'
 
-import { RobotWorkSpace, LabwareRender } from '@opentrons/components'
+import {
+  C_BLUE,
+  Svg,
+  RobotWorkSpace,
+  LabwareRender,
+} from '@opentrons/components'
 import { getDeckDefinitions } from '@opentrons/components/src/deck/getDeckDefinitions'
 
-import type { LabwareDefinition2 } from '@opentrons/shared-data'
+import type { LabwareData } from './labware-types'
+import type { Highlight } from './ui-types'
 
 const deckDef = getDeckDefinitions()['ot2_standard']
 
-export type LabwareLocation = {
-  slot: number,
-  ...
-}
-
-export type LabwareData = {
-  labwareId: string,
-  definition: LabwareDefinition2,
-  location: LabwareLocation,
-  ...
-}
-
 export type ClickableDeckMapProps = {|
   labware: Array<LabwareData>,
+  highlights: Array<Highlight>,
   onWellClick: (labwareId: string, wellName: string) => mixed,
 |}
 
 export function ClickableDeckMap(props: ClickableDeckMapProps): React.Node {
-  const { labware, onWellClick } = props
+  const { labware, highlights, onWellClick } = props
   const [currLabware, setCurrLabware] = React.useState<string | null>(null)
   const [currWell, setCurrWell] = React.useState<string | null>(null)
+  console.log(highlights)
 
   return (
     <RobotWorkSpace
@@ -46,8 +42,8 @@ export function ClickableDeckMap(props: ClickableDeckMapProps): React.Node {
     >
       {({ deckSlotsById }) =>
         labware.map(labwareData => {
-          const { labwareId, definition, location } = labwareData
-          const isCurrLabware = labwareId === currLabware
+          const { labware_id, definition, location } = labwareData
+          const isCurrLabware = labware_id === currLabware
           const slotId = `${location.slot}`
           const slotDef = deckSlotsById[slotId]
           const slotOrigin = slotDef.position
@@ -58,7 +54,7 @@ export function ClickableDeckMap(props: ClickableDeckMapProps): React.Node {
               transform={`translate(${slotOrigin[0]}, ${slotOrigin[1]})`}
               onClick={() => {
                 if (isCurrLabware && currWell) {
-                  onWellClick(labwareId, currWell)
+                  onWellClick(labware_id, currWell)
                 }
               }}
             >
@@ -69,8 +65,17 @@ export function ClickableDeckMap(props: ClickableDeckMapProps): React.Node {
                     ? { [currWell]: null }
                     : null
                 }
+                highlightedWells={highlights.reduce((wellMap, highlight) => {
+                  if (
+                    highlight.labwareId === labware_id &&
+                    highlight.wellName
+                  ) {
+                    wellMap[highlight.wellName] = null
+                  }
+                  return wellMap
+                }, {})}
                 onMouseEnterWell={({ wellName }) => {
-                  setCurrLabware(labwareId)
+                  setCurrLabware(labware_id)
                   setCurrWell(wellName)
                 }}
                 onMouseLeaveWell={({ wellName }) => {
