@@ -4,7 +4,7 @@ import { Provider } from 'react-redux'
 import { AppContainer } from 'react-hot-loader'
 
 import { configureStore } from './configureStore'
-import { App } from './components/App'
+import { HackApp } from './hacks'
 import { initialize } from './initialize'
 import { initializeMixpanel } from './analytics/mixpanel'
 
@@ -26,11 +26,11 @@ const render = Component => {
   )
 }
 
-render(App)
+render(HackApp)
 
 // Hot Module Replacement API
 if (module.hot) {
-  module.hot.accept('./components/App', () => {
-    render(App)
+  module.hot.accept('./hacks', () => {
+    render(HackApp)
   })
 }
