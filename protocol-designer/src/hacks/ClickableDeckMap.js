@@ -3,6 +3,7 @@ import * as React from 'react'
 
 import { C_BLUE, RobotWorkSpace, LabwareRender } from '@opentrons/components'
 import { getDeckDefinitions } from '@opentrons/components/src/deck/getDeckDefinitions'
+import { AddLabwareButton } from './AddLabwareButton'
 
 import type { LabwareData } from './labware-types'
 import type { Highlight } from './ui-types'
@@ -34,8 +35,8 @@ export function ClickableDeckMap(props: ClickableDeckMapProps): React.Node {
       deckDef={deckDef}
       viewBox={`-46 -10 ${488} ${390}`} // TODO: put these in variables
     >
-      {({ deckSlotsById }) =>
-        labware.map(labwareData => {
+      {({ deckSlotsById }) => {
+        const labwareRenders = labware.map(labwareData => {
           const { labwareId, definition, location } = labwareData
           const isCurrLabware = labwareId === currLabware
           const slotId = `${location.slot}`
@@ -90,7 +91,29 @@ export function ClickableDeckMap(props: ClickableDeckMapProps): React.Node {
             </g>
           )
         })
-      }
+
+        const addLabwareButtonRenders = Object.keys(deckSlotsById)
+          .filter(slotId => {
+            return labware.every(lw => `${lw.location.slot}` !== slotId)
+          })
+          .map(slotId => {
+            const slot = deckSlotsById[slotId]
+            return (
+              <AddLabwareButton
+                key={slot.id}
+                slot={slot}
+                loadLabware={console.log}
+              />
+            )
+          })
+
+        return (
+          <>
+            {labwareRenders}
+            {addLabwareButtonRenders}
+          </>
+        )
+      }}
     </RobotWorkSpace>
   )
 }
