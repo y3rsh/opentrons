@@ -1,7 +1,7 @@
 // @flow
 import * as React from 'react'
 
-import { useProtocolSession, useCreateProtocolSession } from './api'
+import { useProtocolSession, useCreateProtocolSession, useMoveToWell } from './api'
 
 import { Flex, Box } from '@opentrons/components'
 import { CommandList } from './CommandList'
@@ -15,6 +15,7 @@ export function MacroProtocolDesigner(): React.Node {
   const [highlights, setHighlights] = React.useState<Array<Highlight>>([])
   const session = useProtocolSession('localhost')
   const createSession = useCreateProtocolSession('localhost')
+  const moveToWell = useMoveToWell('localhost')
 
   const commands: Array<Command> = session?.details.commands ?? []
   const labware: Array<LabwareData> = session?.details.labware ?? []
@@ -34,6 +35,7 @@ export function MacroProtocolDesigner(): React.Node {
 
   const handleWellClick = (labwareId, wellName) => {
     console.log(labwareId, wellName)
+    moveToWell({ labwareId, wellName })
   }
 
   return (

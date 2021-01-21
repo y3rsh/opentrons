@@ -55,5 +55,21 @@ export const useCreateProtocolSession = hostname => {
   return createProtocolSession
 }
 
-// TODO!
-// export const useMoveToWell = hostname => {}
+export const useMoveToWell = hostname => {
+  const client = useHttpClient(hostname)
+  const queryClient = useQueryClient()
+  const session = useProtocolSession(hostname)
+
+  const { mutate: moveToWell } = useMutation(
+    moveToWellParams => {
+      const pipetteId = session.pipettes[0].pipetteId
+      return client.post(`/sessions/${session.id}`, {
+        command: 'pipette.moveToWell',
+        data: { ...moveToWellParams, pipetteId },
+      })
+    },
+    { onSuccess: () => queryClient.invalidateQueries(SESSIONS_CACHE_KEY) }
+  )
+
+  return moveToWell
+}
