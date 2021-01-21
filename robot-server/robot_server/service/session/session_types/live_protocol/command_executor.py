@@ -1,5 +1,4 @@
 import logging
-from typing import Union, cast
 
 from opentrons.protocol_engine import ProtocolEngine, commands
 
@@ -9,7 +8,6 @@ from robot_server.service.session.errors import UnsupportedCommandException, \
     CommandExecutionException
 from robot_server.service.session.models import (
     command_definitions as models)
-from robot_server.util import duration
 
 log = logging.getLogger(__name__)
 
@@ -31,7 +29,7 @@ class LiveProtocolCommandExecutor(CommandExecutor):
         self._protocol_engine = protocol_engine
 
     async def execute(self, command: Command) -> CompletedCommand:
-
+        """Execute a live protocol command."""
         if command.request.command not in self.ACCEPTED_COMMANDS:
             raise UnsupportedCommandException(
                 f"Command '{command.request.command}' is not supported."
