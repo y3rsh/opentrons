@@ -65,7 +65,7 @@ export function MacroProtocolDesigner(): React.Node {
             onCommandClick={handleCommandClick}
           />
         </Box>
-        <Box maxWidth="64rem">
+        <Box width="48rem" height="48rem">
           <ClickableDeckMap
             labware={labware}
             highlights={highlights}
