@@ -26,7 +26,8 @@ stages:
         data:
           command: equipment.loadLabware
           data: &labware_data
-            location: 2
+            location:
+              slot: 2
             loadName: corning_96_wellplate_360ul_flat
             displayName: my well plate
             namespace: Opentrons
