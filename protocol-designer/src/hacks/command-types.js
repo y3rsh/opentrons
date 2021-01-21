@@ -91,7 +91,10 @@ export type MoveToWellCommand = GenericCommand<
 
 export type Command = {
   commandId: string,
-  request: MoveToWellRequest | LoadLabwareRequest,
-  result: MoveToWellResult | LoadLabwareResult,
+  command: {
+    request: MoveToWellRequest | LoadLabwareRequest,
+    result?: MoveToWellResult | LoadLabwareResult,
+    ...
+  },
   ...
 }

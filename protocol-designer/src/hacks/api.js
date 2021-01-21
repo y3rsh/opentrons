@@ -54,18 +54,45 @@ export const useCreateProtocolSession = hostname => {
         .then(response => {
           const sessionId = response.data.data.id
 
-          return client.post(`/sessions/${sessionId}/commands/execute`, {
-            data: {
-              command: 'equipment.loadInstrument',
-              data: { pipetteName: 'p300_single', mount: 'right' },
-            },
-          })
+          return client
+            .post(`/sessions/${sessionId}/commands/execute`, {
+              data: {
+                command: 'equipment.loadInstrument',
+                data: { pipetteName: 'p300_single', mount: 'right' },
+              },
+            })
+            .then(() => {
+              return client.post(`/sessions/${sessionId}/commands/execute`, {
+                data: {
+                  command: 'equipment.loadLabware',
+                  data: {
+                    loadName: 'nest_96_wellplate_200ul_flat',
+                    namespace: 'opentrons',
+                    version: 1,
+                    location: { slot: 5 },
+                  },
+                },
+              })
+            })
         })
     },
     { onSuccess: () => queryClient.invalidateQueries(SESSIONS_CACHE_KEY) }
   )
 
   return createProtocolSession
+}
+
+export const useDeleteProtocolSession = hostname => {
+  const client = useHttpClient(hostname)
+  const queryClient = useQueryClient()
+  const session = useProtocolSession(hostname)
+
+  const { mutate: deleteProtocolSession } = useMutation(
+    () => client.delete(`/sessions/${session.id}`),
+    { onSuccess: () => queryClient.resetQueries(SESSIONS_CACHE_KEY) }
+  )
+
+  return deleteProtocolSession
 }
 
 export const useMoveToWell = hostname => {
@@ -88,4 +115,21 @@ export const useMoveToWell = hostname => {
   )
 
   return moveToWell
+}
+
+export const useProtocolSessionApi = () => {
+  const [hostname, setHostname] = React.useState('localhost')
+  const session = useProtocolSession(hostname)
+  const createSession = useCreateProtocolSession(hostname)
+  const deleteSession = useDeleteProtocolSession(hostname)
+  const moveToWell = useMoveToWell(hostname)
+
+  return {
+    hostname,
+    session,
+    setHostname,
+    createSession,
+    deleteSession,
+    moveToWell,
+  }
 }
