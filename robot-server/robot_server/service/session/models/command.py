@@ -178,6 +178,20 @@ LoadInstrumentResponse = SessionCommandResponse[
 ]
 
 
+MoveToWellRequest = SessionCommandRequest[
+    Literal[PipetteCommand.move_to_well],
+    commands.MoveToWellRequest,
+    commands.MoveToWellResult,
+]
+
+
+MoveToWellResponse = SessionCommandRequest[
+    Literal[PipetteCommand.move_to_well],
+    commands.MoveToWellRequest,
+    commands.MoveToWellResult,
+]
+
+
 AspirateRequest = SessionCommandRequest[
     Literal[PipetteCommand.aspirate],
     commands.AspirateRequest,
@@ -279,6 +293,7 @@ RequestTypes = typing.Union[
     SimpleCommandRequest,
     LoadLabwareRequest,
     LoadInstrumentRequest,
+    MoveToWellRequest,
     AspirateRequest,
     DispenseRequest,
     PickUpTipRequest,
@@ -293,6 +308,7 @@ ResponseTypes = typing.Union[
     SimpleCommandResponse,
     LoadLabwareResponse,
     LoadInstrumentResponse,
+    MoveToWellResponse,
     AspirateResponse,
     DispenseResponse,
     PickUpTipResponse,

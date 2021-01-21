@@ -21,6 +21,7 @@ class LiveProtocolCommandExecutor(CommandExecutor):
         models.PipetteCommand.dispense,
         models.PipetteCommand.pick_up_tip,
         models.PipetteCommand.drop_tip,
+        models.PipetteCommand.move_to_well,
     }
 
     def __init__(

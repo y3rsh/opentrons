@@ -73,6 +73,7 @@ class PipetteCommand(CommandDefinition):
     dispense = "dispense"
     drop_tip = "dropTip"
     pick_up_tip = "pickUpTip"
+    move_to_well = "moveToWell"
 
     @staticmethod
     def namespace():
