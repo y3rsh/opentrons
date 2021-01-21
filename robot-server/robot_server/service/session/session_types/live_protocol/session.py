@@ -31,6 +31,7 @@ class LiveProtocolSession(BaseSession):
     async def create(cls,
                      configuration: SessionConfiguration,
                      instance_meta: SessionMetaData) -> 'LiveProtocolSession':
+        await configuration.hardware.home()
         return LiveProtocolSession(
             configuration=configuration,
             instance_meta=instance_meta,

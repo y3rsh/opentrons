@@ -1,6 +1,7 @@
 """ProtocolEngine class definition."""
 from __future__ import annotations
 from typing import Union
+import logging
 
 from opentrons.hardware_control.api import API as HardwareAPI
 from opentrons.util.helpers import utc_now
@@ -15,6 +16,7 @@ from .commands import (
     FailedCommandType,
 )
 
+log = logging.getLogger(__name__)
 
 class ProtocolEngine:
     """
@@ -86,6 +88,7 @@ class ProtocolEngine:
             done_cmd = cmd.to_completed(result, completed_at)
 
         except Exception as error:
+            log.exception("FAILED")
             failed_at = utc_now()
             if not isinstance(error, ProtocolEngineError):
                 error = UnexpectedProtocolError(error)
