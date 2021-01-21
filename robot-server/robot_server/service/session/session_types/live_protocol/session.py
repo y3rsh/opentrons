@@ -56,7 +56,7 @@ class LiveProtocolSession(BaseSession):
             return i
         commands = [
             {
-                "command_id": v[0],
+                "commandId": v[0],
                 "command": {k: make_json_friendly(v) for k, v in asdict(v[1]).items()}
             }
             for v in sorted(
@@ -64,14 +64,18 @@ class LiveProtocolSession(BaseSession):
                 key=lambda t: t[1].created_at)
         ]
         labware = [
-            LoadLabwareResult(labwareId=v[0], calibration=v[1].calibration, definition=v[1].definition)
-            for v in self._protocol_engine.state_store.labware.get_all_labware()
+            {
+                "labwareId": labware_id,
+                "definition": labware_data.definition,
+                "location": labware_data.location,
+            }
+            for labware_id, labware_data in self._protocol_engine.state_store.labware.get_all_labware()
         ]
         pipettes = [
-            {"pipetteId": v[0],
-             "mount": v[1].mount.name,
-             "name": v[1].pipette_name,
-             } for v in self._protocol_engine.state_store.pipettes.get_all_pipettes()
+            {"pipetteId": pipette_id,
+             "mount": pipette_data.mount.name,
+             "name": pipette_data.pipette_name,
+             } for pipette_id, pipette_data in self._protocol_engine.state_store.pipettes.get_all_pipettes()
         ]
 
         return models.LiveProtocolResponseAttributes(

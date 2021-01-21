@@ -158,7 +158,7 @@ class ProtocolResponseAttributes(
 
 class LiveProtocolSessionDetails(BaseModel):
     commands: typing.List[typing.Dict[str, typing.Any]]
-    labware: typing.List[pe_commands.LoadLabwareResult]
+    labware: typing.List[typing.Dict[str, typing.Any]]
     pipettes: typing.List[typing.Dict[str, typing.Any]]
 
 

@@ -24,7 +24,6 @@ export function ClickableDeckMap(props: ClickableDeckMapProps): React.Node {
   const { labware, highlights, onWellClick } = props
   const [currLabware, setCurrLabware] = React.useState<string | null>(null)
   const [currWell, setCurrWell] = React.useState<string | null>(null)
-  console.log(highlights)
 
   return (
     <RobotWorkSpace
@@ -42,13 +41,13 @@ export function ClickableDeckMap(props: ClickableDeckMapProps): React.Node {
     >
       {({ deckSlotsById }) =>
         labware.map(labwareData => {
-          const { labware_id, definition, location } = labwareData
-          const isCurrLabware = labware_id === currLabware
+          const { labwareId, definition, location } = labwareData
+          const isCurrLabware = labwareId === currLabware
           const slotId = `${location.slot}`
           const slotDef = deckSlotsById[slotId]
           const slotOrigin = slotDef.position
           const labwareHighlight = highlights.some(
-            h => h.labwareId === labware_id && !h.wellName
+            h => h.labwareId === labwareId && !h.wellName
           )
 
           return (
@@ -57,7 +56,7 @@ export function ClickableDeckMap(props: ClickableDeckMapProps): React.Node {
               transform={`translate(${slotOrigin[0]}, ${slotOrigin[1]})`}
               onClick={() => {
                 if (isCurrLabware && currWell) {
-                  onWellClick(labware_id, currWell)
+                  onWellClick(labwareId, currWell)
                 }
               }}
             >
@@ -78,16 +77,13 @@ export function ClickableDeckMap(props: ClickableDeckMapProps): React.Node {
                     : null
                 }
                 highlightedWells={highlights.reduce((wellMap, highlight) => {
-                  if (
-                    highlight.labwareId === labware_id &&
-                    highlight.wellName
-                  ) {
+                  if (highlight.labwareId === labwareId && highlight.wellName) {
                     wellMap[highlight.wellName] = null
                   }
                   return wellMap
                 }, {})}
                 onMouseEnterWell={({ wellName }) => {
-                  setCurrLabware(labware_id)
+                  setCurrLabware(labwareId)
                   setCurrWell(wellName)
                 }}
                 onMouseLeaveWell={({ wellName }) => {

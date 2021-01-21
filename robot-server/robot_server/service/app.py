@@ -3,6 +3,7 @@ import traceback
 
 from opentrons import __version__
 from fastapi import FastAPI, APIRouter, Depends
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.exceptions import RequestValidationError
 from starlette.responses import Response, JSONResponse
 from starlette.requests import Request
@@ -43,6 +44,15 @@ app = FastAPI(
                 "the `x-patternProperties` key to mean the JSON Schema "
                 "`patternProperties` behavior.",
     version=__version__,
+)
+
+# Allow requests from anywhere
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 # Legacy routes

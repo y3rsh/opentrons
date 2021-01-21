@@ -10,7 +10,7 @@ export type LabwareLocation = {
 }
 
 export type LabwareData = {
-  labware_id: string,
+  labwareId: string,
   definition: LabwareDefinition2,
   location: LabwareLocation,
   ...
