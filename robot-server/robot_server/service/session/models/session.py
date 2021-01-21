@@ -4,7 +4,10 @@ from enum import Enum
 import typing
 
 from pydantic import BaseModel, Field
+from pydantic.generics import GenericModel
 from typing_extensions import Literal
+
+from opentrons.protocol_engine import commands as pe_commands
 
 from robot_server.robot.calibration.check.models import (
     CalibrationCheckSessionStatus,
@@ -153,11 +156,17 @@ class ProtocolResponseAttributes(
     details: ProtocolSessionDetails
 
 
+class LiveProtocolSessionDetails(BaseModel):
+    commands: typing.List[typing.Dict[str, typing.Any]]
+    labware: typing.List[pe_commands.LoadLabwareResult]
+    pipettes: typing.List[typing.Dict[str, typing.Any]]
+
+
 class LiveProtocolResponseAttributes(
     LiveProtocolCreateAttributes, SessionResponseAttributes
 ):
     """Response attributes of live protocol session."""
-    pass
+    details: LiveProtocolSessionDetails
 
 
 RequestTypes = typing.Union[
