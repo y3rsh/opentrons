@@ -1,12 +1,7 @@
 // @flow
 import * as React from 'react'
 
-import {
-  C_BLUE,
-  Svg,
-  RobotWorkSpace,
-  LabwareRender,
-} from '@opentrons/components'
+import { C_BLUE, RobotWorkSpace, LabwareRender } from '@opentrons/components'
 import { getDeckDefinitions } from '@opentrons/components/src/deck/getDeckDefinitions'
 
 import type { LabwareData } from './labware-types'

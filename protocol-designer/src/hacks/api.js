@@ -48,7 +48,20 @@ export const useCreateProtocolSession = hostname => {
   const queryClient = useQueryClient()
 
   const { mutate: createProtocolSession } = useMutation(
-    () => client.post('/sessions', { data: { sessionType: 'liveProtocol' } }),
+    () => {
+      return client
+        .post('/sessions', { data: { sessionType: 'liveProtocol' } })
+        .then(response => {
+          const sessionId = response.data.data.id
+
+          return client.post(`/sessions/${sessionId}/commands/execute`, {
+            data: {
+              command: 'equipment.loadInstrument',
+              data: { pipetteName: 'p300_single', mount: 'right' },
+            },
+          })
+        })
+    },
     { onSuccess: () => queryClient.invalidateQueries(SESSIONS_CACHE_KEY) }
   )
 
@@ -62,10 +75,13 @@ export const useMoveToWell = hostname => {
 
   const { mutate: moveToWell } = useMutation(
     moveToWellParams => {
-      const pipetteId = session.pipettes[0].pipetteId
-      return client.post(`/sessions/${session.id}`, {
-        command: 'pipette.moveToWell',
-        data: { ...moveToWellParams, pipetteId },
+      const pipetteId = session.details.pipettes[0].pipetteId
+
+      return client.post(`/sessions/${session.id}/commands/execute`, {
+        data: {
+          command: 'pipette.moveToWell',
+          data: { ...moveToWellParams, pipetteId },
+        },
       })
     },
     { onSuccess: () => queryClient.invalidateQueries(SESSIONS_CACHE_KEY) }

@@ -17,14 +17,14 @@ export function CommandList(props: CommandListProps): React.Node {
   return (
     <ul>
       {commands.map(command => {
-        const { command_id, command_type } = command
-        const color = highlights.some(h => h.commandId === command_id)
+        const { commandId } = command
+        const color = highlights.some(h => h.commandId === commandId)
           ? C_BLUE
           : C_BLACK
 
         return (
-          <li key={command_id} onClick={() => onCommandClick(command_id)}>
-            <Text color={color}>{command_type}</Text>
+          <li key={commandId} onClick={() => onCommandClick(commandId)}>
+            <Text color={color}>{commandId}</Text>
           </li>
         )
       })}

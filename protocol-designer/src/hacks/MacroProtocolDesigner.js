@@ -1,7 +1,11 @@
 // @flow
 import * as React from 'react'
 
-import { useProtocolSession, useCreateProtocolSession, useMoveToWell } from './api'
+import {
+  useProtocolSession,
+  useCreateProtocolSession,
+  useMoveToWell,
+} from './api'
 
 import { Flex, Box } from '@opentrons/components'
 import { CommandList } from './CommandList'
@@ -21,7 +25,7 @@ export function MacroProtocolDesigner(): React.Node {
   const labware: Array<LabwareData> = session?.details.labware ?? []
 
   const handleCommandClick = commandId => {
-    const command = commands.find(c => c.command_id === commandId)
+    const command = commands.find(c => c.commandId === commandId)
 
     const labwareId =
       // $FlowFixMe: this is safe but flow doesn't like it

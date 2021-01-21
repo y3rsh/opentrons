@@ -87,4 +87,11 @@ export type MoveToWellCommand = GenericCommand<
 >
 
 // all commands union
-export type Command = LoadLabwareCommand | MoveToWellCommand
+// export type Command = LoadLabwareCommand | MoveToWellCommand
+
+export type Command = {
+  commandId: string,
+  request: MoveToWellRequest | LoadLabwareRequest,
+  result: MoveToWellResult | LoadLabwareResult,
+  ...
+}
