@@ -14,10 +14,11 @@ export type ClickableDeckMapProps = {|
   labware: Array<LabwareData>,
   highlights: Array<Highlight>,
   onWellClick: (labwareId: string, wellName: string) => mixed,
+  loadLabware: (params: mixed) => mixed,
 |}
 
 export function ClickableDeckMap(props: ClickableDeckMapProps): React.Node {
-  const { labware, highlights, onWellClick } = props
+  const { labware, highlights, onWellClick, loadLabware } = props
   const [currLabware, setCurrLabware] = React.useState<string | null>(null)
   const [currWell, setCurrWell] = React.useState<string | null>(null)
 
@@ -102,7 +103,7 @@ export function ClickableDeckMap(props: ClickableDeckMapProps): React.Node {
               <AddLabwareButton
                 key={slot.id}
                 slot={slot}
-                loadLabware={console.log}
+                loadLabware={params => loadLabware({ ...params, slot: slotId })}
               />
             )
           })

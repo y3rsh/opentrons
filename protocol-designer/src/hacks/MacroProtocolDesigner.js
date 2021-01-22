@@ -19,6 +19,7 @@ export function MacroProtocolDesigner(): React.Node {
     session,
     createSession,
     deleteSession,
+    loadLabware,
     moveToWell,
   } = useProtocolSessionApi()
 
@@ -46,7 +47,7 @@ export function MacroProtocolDesigner(): React.Node {
   }
 
   return (
-    <>
+    <Box padding="2rem">
       <HostnameInput
         hostname={hostname}
         setHostname={setHostname}
@@ -57,22 +58,23 @@ export function MacroProtocolDesigner(): React.Node {
       ) : (
         <button onClick={() => deleteSession()}>End session</button>
       )}
-      <Flex flexDirection="row">
-        <Box width="16rem">
+      <Flex flexDirection="row" marginTop="1rem">
+        <Box width="32rem">
           <CommandList
             commands={commands}
             highlights={highlights}
             onCommandClick={handleCommandClick}
           />
         </Box>
-        <Box width="48rem" height="48rem">
+        <Box width="52rem" height="52rem">
           <ClickableDeckMap
             labware={labware}
+            loadLabware={loadLabware}
             highlights={highlights}
             onWellClick={handleWellClick}
           />
         </Box>
       </Flex>
-    </>
+    </Box>
   )
 }

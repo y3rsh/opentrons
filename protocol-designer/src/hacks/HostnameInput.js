@@ -22,13 +22,14 @@ export function HostnameInput(props: HostnameInputProps): React.Node {
 
   return (
     <Box as="form" onSubmit={handleSubmit} {...styleProps}>
-      <Text>
+      <Text marginBottom="0.5rem">
         <strong>Current robot:</strong> {hostname}
       </Text>
       <input
         type="text"
         value={inputValue}
         placeholder="IP address or hostname"
+        onChange={event => setInputValue(event.target.value)}
       />
       <button type="submit">Set hostname</button>
     </Box>

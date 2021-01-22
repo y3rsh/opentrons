@@ -54,26 +54,12 @@ export const useCreateProtocolSession = hostname => {
         .then(response => {
           const sessionId = response.data.data.id
 
-          return client
-            .post(`/sessions/${sessionId}/commands/execute`, {
-              data: {
-                command: 'equipment.loadInstrument',
-                data: { pipetteName: 'p300_single', mount: 'right' },
-              },
-            })
-            .then(() => {
-              return client.post(`/sessions/${sessionId}/commands/execute`, {
-                data: {
-                  command: 'equipment.loadLabware',
-                  data: {
-                    loadName: 'nest_96_wellplate_200ul_flat',
-                    namespace: 'opentrons',
-                    version: 1,
-                    location: { slot: 5 },
-                  },
-                },
-              })
-            })
+          return client.post(`/sessions/${sessionId}/commands/execute`, {
+            data: {
+              command: 'equipment.loadInstrument',
+              data: { pipetteName: 'p300_single', mount: 'right' },
+            },
+          })
         })
     },
     { onSuccess: () => queryClient.invalidateQueries(SESSIONS_CACHE_KEY) }
@@ -93,6 +79,31 @@ export const useDeleteProtocolSession = hostname => {
   )
 
   return deleteProtocolSession
+}
+
+export const useLoadLabware = hostname => {
+  const client = useHttpClient(hostname)
+  const queryClient = useQueryClient()
+  const session = useProtocolSession(hostname)
+
+  const { mutate: loadLabware } = useMutation(
+    loadLabwareParams => {
+      return client.post(`/sessions/${session.id}/commands/execute`, {
+        data: {
+          command: 'equipment.loadLabware',
+          data: {
+            loadName: loadLabwareParams.loadName,
+            namespace: loadLabwareParams.namespace,
+            version: loadLabwareParams.version,
+            location: { slot: Number(loadLabwareParams.slot) },
+          },
+        },
+      })
+    },
+    { onSuccess: () => queryClient.invalidateQueries(SESSIONS_CACHE_KEY) }
+  )
+
+  return loadLabware
 }
 
 export const useMoveToWell = hostname => {
@@ -122,6 +133,7 @@ export const useProtocolSessionApi = () => {
   const session = useProtocolSession(hostname)
   const createSession = useCreateProtocolSession(hostname)
   const deleteSession = useDeleteProtocolSession(hostname)
+  const loadLabware = useLoadLabware(hostname)
   const moveToWell = useMoveToWell(hostname)
 
   return {
@@ -130,6 +142,7 @@ export const useProtocolSessionApi = () => {
     setHostname,
     createSession,
     deleteSession,
+    loadLabware,
     moveToWell,
   }
 }
