@@ -25,17 +25,24 @@ class SimulationHistoryDB:
 
     def __init__(self, location: str) -> None:
         """Construct."""
-        self._connection = sqlite3.connect(location)
-        self._connection.execute("""
-        CREATE TABLE IF NOT EXISTS simhistory (
-            id INTEGER PRIMARY KEY,
-            name TEXT,
-            author TEXT,
-            content_hash TEXT,
-            api_version TEXT,
-            robot_version TEXT,
-            ts TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )""")
+        self._connection = self.create_connection(location)
+
+    @staticmethod
+    def create_connection(location: str) -> sqlite3.Connection:
+        """Create and initialize db connection."""
+        connection = sqlite3.connect(location)
+        connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS simhistory (
+                id INTEGER PRIMARY KEY,
+                name TEXT,
+                author TEXT,
+                content_hash TEXT,
+                api_version TEXT,
+                robot_version TEXT,
+                ts TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )""")
+        return connection
 
     def add(
             self,
@@ -47,16 +54,15 @@ class SimulationHistoryDB:
     ) -> None:
         """Insert an entry into the simulation history table."""
         with self._connection:
-            a = f"""
+            self._connection.execute(
+                f"""
                 INSERT INTO simhistory (
                     name, author, content_hash, api_version, robot_version)
                 VALUES (
                     '{name}', '{author}', '{content_hash}',
                     '{api_version}', '{robot_version}'
-                )
+                    )
                 """
-            self._connection.execute(
-                a
             )
 
     def find(
@@ -69,11 +75,10 @@ class SimulationHistoryDB:
         """Query for entries in simulation history table."""
         for row in self._connection.execute(
                 f"""
-            SELECT id, name, author, content_hash,
-                api_version, robot_version, ts
-            FROM simhistory
-            WHERE name='{name}' and content_hash='{content_hash}' and
-                api_version='{api_version}' and robot_version='{robot_version}'"""):
+                SELECT id, name, author, content_hash, api_version, robot_version, ts
+                FROM simhistory
+                WHERE name='{name}' and content_hash='{content_hash}' and
+                    api_version='{api_version}' and robot_version='{robot_version}'"""):
             yield self._row_to_entry(row)
 
     def all(self) -> typing.Generator[SimulationEntry, None, None]:
