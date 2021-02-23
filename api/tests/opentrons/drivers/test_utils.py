@@ -15,7 +15,6 @@ from opentrons.drivers.types import Temperature, PlateTemperature
          {'version': '123-2', 'serial': 'serial_v', 'model': 'm'}],
         ['something:extra serial:serial_v model:m version:123-2',
          {'version': '123-2', 'serial': 'serial_v', 'model': 'm'}]
-
     ]
 )
 def test_parse_device_information_success(
