@@ -40,7 +40,7 @@ class SyncClient:
         namespace: str,
         version: int,
     ) -> commands.LoadLabwareResult:
-        """Execute a LoadLabwareRequest, returning the result."""
+        """Execute a ``LoadLabwareRequest``, returning the result."""
         request = commands.LoadLabwareRequest(
             location=location,
             loadName=load_name,
@@ -53,3 +53,29 @@ class SyncClient:
         )
 
         return cast(commands.LoadLabwareResult, result)
+    
+    def aspirate(
+        self,
+        volume: float,
+        rate: float,
+    ) -> commands.AspirateResult:
+        """Execute an ``AspirateRequest``, returning the result."""
+        request = commands.AspirateRequest(
+            pipetteId="?????",  # fix before merge
+            labwareId="?????",  # fix before merge
+            wellName="?????",  # fix before merge
+            wellLocation="?????", # fix before merge
+            volume=volume,
+        )
+        # Fix before merge: AspirateRequest needs to take a rate?
+        result = self._transport.execute_command(
+            request=request,
+            command_id=self._create_command_id()
+        )
+        
+        # Fix before merge:
+        # Is this right? Copies the load_labware() implementation, but
+        # is a FailedAspirateResult still an AspirateResult?
+        # What forces the caller to check for command failure? Are they meant
+        # to do an isinstance() check? Should we raise an exception?
+        return cast(commands.AspirateResult, result)
