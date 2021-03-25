@@ -7,7 +7,7 @@ from .pipetting_common import BasePipettingRequest
 
 
 class PickUpTipRequest(BasePipettingRequest):
-    """A request to move a pipette to a specific well."""
+    """A request to pick up a tip from a specific well."""
 
     def get_implementation(self) -> PickUpTipImplementation:
         """Get the pick up tip request's command implementation."""
