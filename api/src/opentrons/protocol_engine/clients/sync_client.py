@@ -9,7 +9,16 @@ from .transports import AbstractSyncTransport
 
 
 class SyncClient:
-    """Synchronous Protocol Engine client."""
+    """Synchronously interact with a `ProtocolEngine`.
+
+    A `ProtocolEngine` normally provides an ``async`` interface for executing
+    commands. This class wraps that with a synchronous interface. Each
+    method blocks until the underlying command completes and returns a result,
+    or raises an exception if the underlying command has an error.
+
+    In the future, this class could also abstract away stuff like running
+    the `ProtocolEngine` in a separate process.
+    """
 
     def __init__(self, transport: AbstractSyncTransport) -> None:
         """Initialize the client with a transport."""
