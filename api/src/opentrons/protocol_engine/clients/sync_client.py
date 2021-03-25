@@ -4,7 +4,7 @@ from typing import cast
 
 from .. import commands
 from ..state import StateView
-from ..types import DeckSlotLocation
+from ..types import DeckSlotLocation, WellLocation
 from .transports import AbstractSyncTransport
 
 
@@ -53,18 +53,23 @@ class SyncClient:
         )
 
         return cast(commands.LoadLabwareResult, result)
-    
+
     def aspirate(
         self,
+        pipette_id: str,  # fix before merge: This is the right place to
+                          # transition from snake_case to camelCase, right?
+        labware_id: str,
+        well_name: str,
+        well_location: WellLocation,
         volume: float,
         rate: float,
     ) -> commands.AspirateResult:
         """Execute an ``AspirateRequest``, returning the result."""
         request = commands.AspirateRequest(
-            pipetteId="?????",  # fix before merge
-            labwareId="?????",  # fix before merge
-            wellName="?????",  # fix before merge
-            wellLocation="?????", # fix before merge
+            pipetteId=pipette_id,
+            labwareId=labware_id,
+            wellName=well_name,
+            wellLocation=well_location,
             volume=volume,
         )
         # Fix before merge: AspirateRequest needs to take a rate?
@@ -72,7 +77,7 @@ class SyncClient:
             request=request,
             command_id=self._create_command_id()
         )
-        
+
         # Fix before merge:
         # Is this right? Copies the load_labware() implementation, but
         # is a FailedAspirateResult still an AspirateResult?
