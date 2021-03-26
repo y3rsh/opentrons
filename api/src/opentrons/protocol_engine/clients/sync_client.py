@@ -56,8 +56,7 @@ class SyncClient:
 
     def aspirate(
         self,
-        pipette_id: str,  # fix before merge: This is the right place to
-                          # transition from snake_case to camelCase, right?
+        pipette_id: str,
         labware_id: str,
         well_name: str,
         well_location: WellLocation,
