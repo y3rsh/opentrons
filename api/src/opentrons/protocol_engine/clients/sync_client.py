@@ -62,7 +62,6 @@ class SyncClient:
         well_name: str,
         well_location: WellLocation,
         volume: float,
-        rate: float,
     ) -> commands.AspirateResult:
         """Execute an ``AspirateRequest``, returning the result."""
         request = commands.AspirateRequest(
@@ -72,7 +71,6 @@ class SyncClient:
             wellLocation=well_location,
             volume=volume,
         )
-        # Fix before merge: AspirateRequest needs to take a rate?
         result = self._transport.execute_command(
             request=request,
             command_id=self._create_command_id()
