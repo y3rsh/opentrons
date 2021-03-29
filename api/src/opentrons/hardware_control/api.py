@@ -1520,7 +1520,7 @@ class API(HardwareAPILike):
         retract_target = max(instr[0].config.pick_up_distance
                              + incrt * checked_presses + 2
                              for instr, incrt in zip(instruments, check_incr))
-
+        self._log.debug(f'*******======> Retract target: {retract_target}')
         await self.retract(mount, retract_target)
 
     def set_current_tiprack_diameter(

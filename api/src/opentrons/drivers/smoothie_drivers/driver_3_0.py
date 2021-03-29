@@ -1600,6 +1600,7 @@ class SmoothieDriver_3_0_0:
             elif 'Y' in axes:
                 self._home_y()
             else:
+                log.debug(f"Homing {axes} now!")
                 # if we are homing neither the X nor Y axes, simple home
                 self.activate_axes(axes)
                 self._do_relative_splits_during_home_for(
@@ -1626,7 +1627,7 @@ class SmoothieDriver_3_0_0:
             for ax in homed_axes
         }
         self.update_position(default=homed)
-
+        log.debug(f"!!!!!=====> Homed position: {homed}")
         for ax in homed_axes:
             self.engaged_axes[ax] = True
 
@@ -1636,6 +1637,7 @@ class SmoothieDriver_3_0_0:
             ax: self.position[ax]
             for ax in homed_axes
         }
+        log.debug(f"!!!!!=====> New position: {new}")
         self._homed_position.update(new)
         self._axes_moved_at.mark_moved(homed_axes)
         return self.position
@@ -1741,12 +1743,14 @@ class SmoothieDriver_3_0_0:
         Given a ktimen distance we have just stalled along an axis, move
         that distance away from the homing switch. Then finish with home.
         """
+        log.debug('=====> fast home!')
         # move some mm distance away from the target axes endstop switch(es)
         destination = {
             ax: self.homed_position.get(ax) - abs(safety_margin)
             for ax in axis.upper()
         }
-
+        log.debug(f'=====> safety margin: {safety_margin}')
+        log.debug(f'=====> desintation: {destination}')
         # there is a chance the axis will hit it's home switch too soon
         # if this happens, catch the error and continue with homing afterwards
         try:
