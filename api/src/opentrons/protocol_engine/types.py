@@ -29,6 +29,12 @@ class WellOrigin(str, Enum):
 class WellLocation(BaseModel):
     """A relative location in reference to a well's location."""
 
+    # todo(mm, 2021-03-24): How is this interpreted for 8-Channel pipettes?
+    # Offset relative to the back-most targeted well? Offset relative to all
+    # targeted wells at once? If you have an 8-Channel and are targeting a
+    # column of wells that aren't exactly 9 mm apart, the offset would be
+    # different for each well.
+
     origin: WellOrigin = WellOrigin.TOP
     offset: Tuple[float, float, float] = (0, 0, 0)
 

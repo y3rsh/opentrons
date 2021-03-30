@@ -17,6 +17,7 @@ class BasePipettingRequest(BaseModel):
     )
     wellName: str = Field(
         ...,
+        # FIXME IMMEDIATELY: Single well?
         description="Name of well to use in labware.",
     )
 
@@ -26,6 +27,7 @@ class BaseLiquidHandlingRequest(BasePipettingRequest):
 
     volume: float = Field(
         ...,
+        # FIXME IMMEDIATELY: Tip maximum volume?
         description="Amount of liquid in uL. Must be greater than 0 and less "
                     "than a pipette-specific maximum volume.",
         gt=0,
