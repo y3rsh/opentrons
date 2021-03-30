@@ -78,9 +78,4 @@ class SyncClient:
             command_id=self._create_command_id()
         )
 
-        # Fix before merge:
-        # Is this right? Copies the load_labware() implementation, but
-        # is a FailedAspirateResult still an AspirateResult?
-        # What forces the caller to check for command failure? Are they meant
-        # to do an isinstance() check? Should we raise an exception?
         return cast(commands.AspirateResult, result)
