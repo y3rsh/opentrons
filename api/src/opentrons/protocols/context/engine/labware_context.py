@@ -166,6 +166,14 @@ class LabwareContext(AbstractLabware):
         """Get the load name."""
         return self._state.labware.get_load_name(labware_id=self._id)
 
+    @property
+    def protocol_engine_id(self) -> str:
+        """Return this labware's ID from Protocol Engine."""
+        # todo(mm, 2021-03-25): It'd be nice if we had a way of visibly
+        # separating these internal things from the things that are meant to
+        # be part of the public Python Protocol API.
+        return self._id
+
     def _build_wells(self) -> List[WellImplementation]:
         """Create well objects."""
         definition = self.get_definition()

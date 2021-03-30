@@ -4,6 +4,9 @@ from __future__ import annotations
 
 import typing
 
+from opentrons import protocol_engine
+import opentrons.protocol_engine.clients  # fix before merge: This import?
+
 from opentrons import types
 from opentrons.hardware_control.dev_types import PipetteDict
 from opentrons.protocols.api_support.util import Clearances, PlungerSpeeds, \
@@ -14,6 +17,14 @@ from opentrons.protocols.context.instrument import AbstractInstrument
 
 
 class PipetteContext(AbstractInstrument):
+    _engine_client: opentrons.protocol_engine.clients.SyncClient
+    _id: str
+
+    def __init__(self,
+                 engine_client: opentrons.protocol_engine.clients.SyncClient,
+                 pipette_id: str) -> None:
+        self._engine_client = engine_client
+        self._id = pipette_id
 
     def get_default_speed(self) -> float:
         raise NotImplementedError()
