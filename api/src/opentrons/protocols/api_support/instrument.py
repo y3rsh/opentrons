@@ -11,6 +11,8 @@ from opentrons.protocols.api_support.types import APIVersion
 from opentrons_shared_data.protocol.dev_types import LiquidHandlingCommand, \
     BlowoutLocation
 
+mod_log = logging.getLogger(__name__)
+
 
 def validate_blowout_location(
         api_version: APIVersion,
@@ -41,7 +43,7 @@ def validate_blowout_location(
             f" but it is {blowout_location}")
 
 
-def tip_length_for(pipette: PipetteDict, tiprack: Labware) -> float:
+def tip_length_for(pipette: PipetteDict, tiprack: Labware, log: logging.Logger) -> float:
     """ Get the tip length, including overlap, for a tip from this rack """
 
     def _build_length_from_overlap() -> float:
@@ -52,11 +54,15 @@ def tip_length_for(pipette: PipetteDict, tiprack: Labware) -> float:
         return tip_length - tip_overlap
 
     try:
+        log.debug(f'*******>  Pipette context serial number: {pipette["pipette_id"]}')
         parent = LabwareLike(tiprack).first_parent() or ''
-        return get.load_tip_length_calibration(
+        log.debug(f'============> Parent: {parent}')
+        tip_length = get.load_tip_length_calibration(
             pipette['pipette_id'],
             tiprack._implementation.get_definition(),
             parent).tip_length
+        log.debug(f'Tip length: {tip_length}')
+        return tip_length
     except TipLengthCalNotFound:
         return _build_length_from_overlap()
 

@@ -633,6 +633,7 @@ class InstrumentContext(CommandPublisher):
 
         :returns: This instance
         """
+        self._log.debug('Calling instrument context pick up tip')
         if location and isinstance(location, types.Location):
             if location.labware.is_labware:
                 tiprack = location.labware.as_labware()
@@ -662,7 +663,6 @@ class InstrumentContext(CommandPublisher):
                    'before', None, None, self, location=target)
 
         self.move_to(target.top())
-
         self._implementation.pick_up_tip(
             well=target._impl,
             tip_length=self._tip_length_for(tiprack),
@@ -1420,7 +1420,7 @@ class InstrumentContext(CommandPublisher):
             log_parent=self._log
         )
 
-    @lru_cache(maxsize=12)
+    # @lru_cache(maxsize=12)
     def _tip_length_for(self, tiprack: Labware) -> float:
         """ Get the tip length, including overlap, for a tip from this rack """
-        return tip_length_for(self.hw_pipette, tiprack)
+        return tip_length_for(self.hw_pipette, tiprack, self._log)

@@ -167,6 +167,7 @@ class Pipette:
                 .format(mod_offset_xy, instr)
             info_str += ' - tip_length: {}'.format(tip_length)
             info_str += ')'
+            info_str += ' serial number: {}'.format(self._pipette_id)
             self._log.debug(info_str)
 
         return cp
