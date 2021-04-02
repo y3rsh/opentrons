@@ -38,7 +38,27 @@ class PipetteContext(AbstractInstrument):
         if rate != 1:
             raise NotImplementedError(
                 "Protocol Engine does not yet support adjusting flow rate.")
-        raise NotImplementedError()
+        
+        # Fix before merge: Consider what "current location" means when there
+        # are two pipettes. I guess if you do left_pipette.move_to(...),
+        # the location of right_pipette gets cleared?
+        #
+        # Fix before merge: Ensure the underlying AspirateRequest
+        # implementation does something reasonable when it's given a location
+        # that exactly matches its current location. (i.e. it doesn't move.)
+            
+        current_location = self.current_location  # Fix before merge: Implement.
+        labware_id = "todo"  # Fix before merge: Derive from current_location somehow.
+        well_name = "todo"
+        well_location = "todo"
+        
+        self._engine_client.aspirate(
+            pipette_id=self._id,
+            labware_id=labware_id,
+            well_name=well_name,
+            well_location=well_location,
+            volume=volume
+        )
 
     def dispense(self,
                  volume: float,
