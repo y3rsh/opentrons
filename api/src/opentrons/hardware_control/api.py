@@ -1077,6 +1077,8 @@ class API(HardwareAPILike):
                              "x, y, and (z or a) or none of them")
         primary_transformed, secondary_transformed =\
             self._get_transformed(to_transform_primary, to_transform_secondary)
+        p_t = primary_transformed
+        s_t = secondary_transformed
         if offsets:
             p_t = tuple([t-o for t, o in zip(primary_transformed, offsets)])
             if len(offsets) > 3:
