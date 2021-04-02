@@ -897,10 +897,10 @@ class API(HardwareAPILike):
                  (secondary_z, abs_position.z)
                  ))
             offsets = (
-                (primary_offset.x - primary_cp.x),
-                (primary_offset.y - primary_cp.y),
-                (primary_offset.z - primary_cp.z),
-                (s_offset.z - s_cp.z))
+                (primary_offset.x + primary_cp.x),
+                (primary_offset.y + primary_cp.y),
+                (primary_offset.z + primary_cp.z),
+                (s_offset.z + s_cp.z))
         else:
             primary_cp =\
                 self._critical_point_for(primary_mount, critical_point)
@@ -912,9 +912,9 @@ class API(HardwareAPILike):
                  (primary_z, abs_position.z)
                  ))
             offsets = (
-                (primary_offset.x - primary_cp.x),
-                (primary_offset.y - primary_cp.y),
-                (primary_offset.z - primary_cp.z))
+                (primary_offset.x + primary_cp.x),
+                (primary_offset.y + primary_cp.y),
+                (primary_offset.z + primary_cp.z))
 
         await self._cache_and_maybe_retract_mount(primary_mount)
         await self._move(
@@ -1077,6 +1077,10 @@ class API(HardwareAPILike):
                              "x, y, and (z or a) or none of them")
         primary_transformed, secondary_transformed =\
             self._get_transformed(to_transform_primary, to_transform_secondary)
+        self._log.info(f"Here is the offset ******")
+        self._log.info(offsets)
+        self._log.info(f"Primary transformed: {primary_transformed}")
+        self._log.info(f"Secondary transformed: {secondary_transformed}")
         p_t = primary_transformed
         s_t = secondary_transformed
         if offsets:
