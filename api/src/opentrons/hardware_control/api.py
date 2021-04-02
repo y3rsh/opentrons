@@ -891,26 +891,35 @@ class API(HardwareAPILike):
             s_cp = self._critical_point_for(
                 secondary_mount, critical_point)
             target_position = OrderedDict(
-                ((Axis.X, abs_position.x - primary_offset.x - primary_cp.x),
-                 (Axis.Y, abs_position.y - primary_offset.y - primary_cp.y),
-                 (primary_z, abs_position.z - primary_offset.z - primary_cp.z),
-                 (secondary_z, abs_position.z - s_offset.z - s_cp.z)
+                ((Axis.X, abs_position.x),
+                 (Axis.Y, abs_position.y),
+                 (primary_z, abs_position.z),
+                 (secondary_z, abs_position.z)
                  ))
+            offsets = (
+                (primary_offset.x - primary_cp.x),
+                (primary_offset.y - primary_cp.y),
+                (primary_offset.z - primary_cp.z),
+                (s_offset.z - s_cp.z))
         else:
             primary_cp =\
                 self._critical_point_for(primary_mount, critical_point)
             primary_z = Axis.by_mount(primary_mount)
             secondary_z = None
             target_position = OrderedDict(
-                ((Axis.X, abs_position.x - primary_offset.x - primary_cp.x),
-                 (Axis.Y, abs_position.y - primary_offset.y - primary_cp.y),
-                 (primary_z, abs_position.z - primary_offset.z - primary_cp.z)
+                ((Axis.X, abs_position.x),
+                 (Axis.Y, abs_position.y),
+                 (primary_z, abs_position.z)
                  ))
+            offsets = (
+                (primary_offset.x - primary_cp.x),
+                (primary_offset.y - primary_cp.y),
+                (primary_offset.z - primary_cp.z))
 
         await self._cache_and_maybe_retract_mount(primary_mount)
         await self._move(
             target_position, speed=speed,
-            max_speeds=max_speeds, secondary_z=secondary_z)
+            max_speeds=max_speeds, secondary_z=secondary_z, offsets=offsets)
 
     async def move_rel(self, mount: Union[top_types.Mount, PipettePair],
                        delta: top_types.Point,
@@ -1031,7 +1040,8 @@ class API(HardwareAPILike):
                     max_speeds: Dict[Axis, float] = None,
                     acquire_lock: bool = True,
                     secondary_z: Axis = None,
-                    check_bounds: MotionChecks = MotionChecks.NONE):
+                    check_bounds: MotionChecks = MotionChecks.NONE,
+                    offsets: Tuple = None):
         """ Worker function to apply robot motion.
 
         Robot motion means the kind of motions that are relevant to the robot,
@@ -1067,7 +1077,12 @@ class API(HardwareAPILike):
                              "x, y, and (z or a) or none of them")
         primary_transformed, secondary_transformed =\
             self._get_transformed(to_transform_primary, to_transform_secondary)
-        transformed = (*primary_transformed, secondary_transformed[2])
+        if offsets:
+            p_t = tuple([t-o for t, o in zip(primary_transformed, offsets)])
+            if len(offsets) > 3:
+                s_t = secondary_transformed[2] - offsets[-1]
+        transformed = (*p_t, s_t[2])
+
         # Since target_position is an OrderedDict with the axes ordered by
         # (x, y, z, a, b, c), and we’ll only have one of a or z (as checked
         # by the len(to_transform) check above) we can use an enumerate to
