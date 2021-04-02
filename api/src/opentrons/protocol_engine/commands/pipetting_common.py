@@ -4,6 +4,11 @@ from pydantic import BaseModel, Field
 from ..types import WellLocation
 
 
+# todo(mm, 2021-04-02): Does it make sense to split liquid handling requests
+# and pipetting requests into this taxonomy? It doesn't necessarily cleanly
+# fit what we want to do with pipettes. e.g. it shouldn't be legal to apply an
+# offset to a pick_up_tip(), but it should be legal to apply it to an aspirate
+# or generic move_to().
 class BasePipettingRequest(BaseModel):
     """Base class for pipetting requests that interact with wells."""
 

@@ -25,6 +25,7 @@ class PipetteLocationData:
 
     mount: MountType
     critical_point: Optional[CriticalPoint]
+    
 
 
 class MotionState:
@@ -171,6 +172,10 @@ class MotionStore(Substore[MotionState], CommandReactive):
                 commands.DispenseResult,
             ),
         ):
+            # todo(mm, 2021-04-02): This only saves the DeckLocation (current
+            # labware and well). Should it also save the WellLocation (current
+            # offset within that well)? 
+            
             self._state._current_location = DeckLocation(
                 pipette_id=command.request.pipetteId,
                 labware_id=command.request.labwareId,

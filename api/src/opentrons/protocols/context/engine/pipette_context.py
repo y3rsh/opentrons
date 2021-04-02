@@ -46,7 +46,10 @@ class PipetteContext(AbstractInstrument):
         # Fix before merge: Ensure the underlying AspirateRequest
         # implementation does something reasonable when it's given a location
         # that exactly matches its current location. (i.e. it doesn't move.)
-            
+        #
+        # Fix before merge: Consider what happens if you aspirate from deck
+        # coordinates?
+        current_location = self._engine_client.state
         current_location = self.current_location  # Fix before merge: Implement.
         labware_id = "todo"  # Fix before merge: Derive from current_location somehow.
         well_name = "todo"
