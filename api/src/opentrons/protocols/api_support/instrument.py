@@ -55,7 +55,7 @@ def tip_length_for(pipette: PipetteDict, tiprack: Labware, log: logging.Logger) 
 
     try:
         log.debug(f'*******>  Pipette context serial number: {pipette["pipette_id"]}')
-        parent = LabwareLike(tiprack).first_parent() or ''
+        parent = ''
         log.debug(f'============> Parent: {parent}')
         tip_length = get.load_tip_length_calibration(
             pipette['pipette_id'],
