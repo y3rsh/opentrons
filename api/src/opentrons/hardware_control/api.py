@@ -1118,7 +1118,7 @@ class API(HardwareAPILike):
                 self._current_position.clear()
                 raise
             else:
-                self._current_position.update(target_position)
+                self._current_position = self._deck_from_smoothie(self._backend.update_position())
 
     def get_engaged_axes(self) -> Dict[Axis, bool]:
         """ Which axes are engaged and holding. """
