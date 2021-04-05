@@ -1082,13 +1082,14 @@ class API(HardwareAPILike):
         self._log.info(f"Primary transformed: {primary_transformed}")
         self._log.info(f"Secondary transformed: {secondary_transformed}")
         p_t = primary_transformed
-        s_t = secondary_transformed
+        s_t = secondary_transformed[2]
         if offsets:
-            p_t = tuple([t-o for t, o in zip(primary_transformed, offsets)])
+            p_t = tuple([t - o for t, o in zip(primary_transformed, offsets)])
             if len(offsets) > 3:
                 s_t = secondary_transformed[2] - offsets[-1]
-        transformed = (*p_t, s_t[2])
-
+        transformed = (*p_t, s_t)
+        self._log.info(f"After primary offsets applied {p_t}")
+        self._log.info(f"After secondary offsets applied {s_t}")
         # Since target_position is an OrderedDict with the axes ordered by
         # (x, y, z, a, b, c), and we’ll only have one of a or z (as checked
         # by the len(to_transform) check above) we can use an enumerate to
