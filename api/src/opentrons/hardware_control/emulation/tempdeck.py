@@ -6,7 +6,7 @@ The purpose is to provide a fake backend that responds to GCODE commands.
 import logging
 from typing import Optional
 
-from opentrons.drivers.temp_deck.driver import GCODES
+from opentrons.drivers.asyncio.tempdeck.driver import GCODE
 from opentrons.hardware_control.emulation import util
 from opentrons.hardware_control.emulation.parser import Parser, Command
 
@@ -15,11 +15,6 @@ from .abstract_emulator import AbstractEmulator
 
 logger = logging.getLogger(__name__)
 
-GCODE_GET_TEMP = GCODES['GET_TEMP']
-GCODE_SET_TEMP = GCODES['SET_TEMP']
-GCODE_DEVICE_INFO = GCODES['DEVICE_INFO']
-GCODE_DISENGAGE = GCODES['DISENGAGE']
-GCODE_PROGRAMMING_MODE = GCODES['PROGRAMMING_MODE']
 
 SERIAL = "fake_serial"
 MODEL = "temp_emulator"
@@ -43,18 +38,18 @@ class TempDeckEmulator(AbstractEmulator):
     def _handle(self, command: Command) -> Optional[str]:
         """Handle a command."""
         logger.info(f"Got command {command}")
-        if command.gcode == GCODE_GET_TEMP:
+        if command.gcode == GCODE.GET_TEMP:
             return f"T:{self.target_temp} C:{self.current_temp}"
-        elif command.gcode == GCODE_SET_TEMP:
+        elif command.gcode == GCODE.SET_TEMP:
             temperature = command.params['S']
             assert isinstance(temperature, float),\
                 f"invalid temperature '{temperature}'"
             self._set_target(temperature)
-        elif command.gcode == GCODE_DISENGAGE:
+        elif command.gcode == GCODE.DISENGAGE:
             self._set_target(util.TEMPERATURE_ROOM)
-        elif command.gcode == GCODE_DEVICE_INFO:
+        elif command.gcode == GCODE.DEVICE_INFO:
             return f"serial:{SERIAL} model:{MODEL} version:{VERSION}"
-        elif command.gcode == GCODE_PROGRAMMING_MODE:
+        elif command.gcode == GCODE.PROGRAMMING_MODE:
             pass
         return None
 

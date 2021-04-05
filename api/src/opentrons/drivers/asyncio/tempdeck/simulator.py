@@ -11,22 +11,20 @@ TEMP_DECK_MODELS = {
 
 class SimulatingDriver(AbstractTempDeckDriver):
     def __init__(self, sim_model: str = None):
-        self._target_temp = 0.0
-        self._active = False
+        self._temp = Temperature(target=None, current=0)
         self._port: Optional[str] = None
         self._model = TEMP_DECK_MODELS[sim_model] if sim_model\
             else 'temp_deck_v1.1'
 
     async def set_temperature(self, celsius: float):
-        self._target_temp = celsius
-        self._active = True
+        self._temp.target = celsius
+        self._temp.current = self._temp.target
 
     async def get_temperature(self) -> Temperature:
-        return Temperature(target=self._target_temp, current=self._target_temp)
+        return self._temp
 
     async def deactivate(self):
-        self._target_temp = 0
-        self._active = False
+        self._temp = Temperature(target=None, current=0)
 
     async def connect(self):
         pass

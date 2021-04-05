@@ -1,7 +1,5 @@
 import pytest
-import asyncio
 from opentrons.hardware_control import modules, ExecutionManager
-from opentrons.hardware_control.modules import tempdeck
 
 
 from opentrons.drivers.rpi_drivers.types import USBPort
@@ -33,6 +31,7 @@ async def test_sim_state(loop, usb_port):
                                interrupt_callback=lambda x: None,
                                loop=loop,
                                execution_manager=ExecutionManager(loop=loop))
+    await temp._poller.wait_next_poll()
     assert temp.temperature == 0
     assert temp.target is None
     assert temp.status == 'idle'
@@ -54,34 +53,15 @@ async def test_sim_update(loop, usb_port):
                                interrupt_callback=lambda x: None,
                                loop=loop,
                                execution_manager=ExecutionManager(loop=loop))
-    await asyncio.wait_for(temp.set_temperature(10), 0.2)
+    await temp.set_temperature(10)
     assert temp.temperature == 10
     assert temp.target == 10
     assert temp.status == 'holding at target'
     await temp.deactivate()
+    await temp._poller.wait_next_poll()
     assert temp.temperature == 0
     assert temp.target is None
     assert temp.status == 'idle'
-
-
-async def test_poller(monkeypatch, loop, usb_port):
-    temp = modules.tempdeck.TempDeck(
-            port='/dev/ot_module_sim_tempdeck0',
-            usb_port=usb_port,
-            execution_manager=ExecutionManager(loop=loop),
-            simulating=True,
-            loop=loop)
-    hit = False
-
-    def update_called():
-        nonlocal hit
-        hit = True
-
-    monkeypatch.setattr(temp._driver, 'update_temperature', update_called)
-    await temp._connect()
-    assert temp._poller.is_alive()
-    await asyncio.sleep(tempdeck.TEMP_POLL_INTERVAL_SECS * 1.1)
-    assert hit
 
 
 async def test_revision_model_parsing(loop, usb_port):

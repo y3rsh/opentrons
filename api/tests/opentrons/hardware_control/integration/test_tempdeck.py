@@ -27,7 +27,6 @@ def test_device_info(tempdeck) -> None:
             'version': '1'} == tempdeck.device_info
 
 
-@pytest.mark.xfail(reason="This test an its sleeps will be deprecated soon.")
 async def test_cycle(tempdeck) -> None:
     assert tempdeck.live_data == {
         'status': "idle",
@@ -39,7 +38,7 @@ async def test_cycle(tempdeck) -> None:
 
     await tempdeck.set_temperature(10)
     # Wait for poll
-    await asyncio.sleep(1)
+    await tempdeck._poller.wait_next_poll()
     assert tempdeck.live_data == {
             'status': "holding at target",
             'data': {
@@ -50,7 +49,7 @@ async def test_cycle(tempdeck) -> None:
 
     await tempdeck.deactivate()
     # Wait for poll
-    await asyncio.sleep(1)
+    await tempdeck._poller.wait_next_poll()
     assert tempdeck.live_data == {
         'status': "holding at target",
         'data': {
