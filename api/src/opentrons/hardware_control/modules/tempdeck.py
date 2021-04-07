@@ -34,10 +34,6 @@ def _model_from_revision(revision: Optional[str]) -> str:
         return 'temperatureModuleV2'
 
 
-class MissingDevicePortError(Exception):
-    pass
-
-
 class Poller(Thread):
     def __init__(self, driver: Union[TempDeckDriver, SimulatingDriver]):
         self._driver_ref = driver

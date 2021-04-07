@@ -22,8 +22,8 @@ class TempDeckEmulator(AbstractEmulator):
     """TempDeck emulator"""
 
     def __init__(self) -> None:
-        self.target_temp = 0
-        self.current_temp = 0
+        self.target_temp = 0.0
+        self.current_temp = 0.0
 
     def handle(self, words: List[str]) -> Optional[str]:
         """Handle a command."""
@@ -32,11 +32,18 @@ class TempDeckEmulator(AbstractEmulator):
         if cmd == GCODE_GET_TEMP:
             return f"T:{self.target_temp} C:{self.current_temp}"
         elif cmd == GCODE_SET_TEMP:
+            assert words[1][0] == 'S'
+            self._set_target(float(words[1][1:]))
             pass
         elif cmd == GCODE_DISENGAGE:
+            self._set_target(23)
             pass
         elif cmd == GCODE_DEVICE_INFO:
             return f"serial:{SERIAL} model:{MODEL} version:{VERSION}"
         elif cmd == GCODE_DFU:
             pass
         return None
+
+    def _set_target(self, target_temp: float) -> None:
+        self.target_temp = target_temp
+        self.current_temp = self.target_temp

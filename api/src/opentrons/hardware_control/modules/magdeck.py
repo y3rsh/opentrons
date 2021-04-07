@@ -7,7 +7,7 @@ from opentrons.drivers.rpi_drivers.types import USBPort
 from ..execution_manager import ExecutionManager
 from . import update, mod_abc, types
 
-log = logging.getLogger('__name__')
+log = logging.getLogger(__name__)
 
 MAX_ENGAGE_HEIGHT = {
     # mm from home position
