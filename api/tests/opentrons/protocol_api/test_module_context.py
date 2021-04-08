@@ -1,5 +1,7 @@
 import json
 from unittest import mock
+import asyncio
+
 from opentrons.hardware_control.modules.magdeck import OFFSET_TO_LABWARE_BOTTOM
 import opentrons.protocol_api as papi
 import opentrons.protocols.geometry as papi_geometry
@@ -91,7 +93,7 @@ def test_load_simulating_module(ctx, loadname, klass, model):
     assert mod._module.model() == model
 
 
-def test_tempdeck(ctx_with_tempdeck):
+async def test_tempdeck(ctx_with_tempdeck):
     mod = ctx_with_tempdeck.load_module('Temperature Module', 1)
     assert ctx_with_tempdeck.deck[1] == mod._geometry
     assert mod.target is None
@@ -103,6 +105,8 @@ def test_tempdeck(ctx_with_tempdeck):
     mod.deactivate()
     assert 'deactivating temperature' in ','.join(
         cmd.lower() for cmd in ctx_with_tempdeck.commands())
+    # TODO AL 20210408 REMOVE THIS!
+    await asyncio.sleep(1.1)
     assert mod.target is None
     mod.set_temperature(0)
     assert mod.target == 0

@@ -36,6 +36,8 @@ async def test_cycle(tempdeck) -> None:
     }
 
     await tempdeck.set_temperature(10)
+    # Wait for poll
+    await tempdeck._poller.wait_next_poll()
     assert tempdeck.live_data == {
             'status': "holding at target",
             'data': {

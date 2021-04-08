@@ -218,7 +218,7 @@ class TempDeck(mod_abc.AbstractModule):
         """
         DELTA: Final = 0.7
         status = Status.IDLE
-        if temperature.target:
+        if temperature.target is not None:
             diff = temperature.target - temperature.current
             if abs(diff) < DELTA:  # To avoid status fluctuation near target
                 status = Status.HOLDING
