@@ -255,6 +255,7 @@ class TemperaturePoller:
         """Construct the poller."""
         self._driver = driver
         self._condition = asyncio.Condition()
+        self._shutdown_event = asyncio.Event()
         self._temperature = Temperature(current=25, target=None)
         self._interval = interval_seconds
         self._task = asyncio.create_task(self._poller())
@@ -272,7 +273,7 @@ class TemperaturePoller:
 
     def stop(self) -> None:
         """Stop the poller."""
-        self._task.cancel()
+        self._shutdown_event.set()
 
     async def stop_and_wait(self) -> None:
         """Stop the poller and wait for it to complete."""
@@ -286,4 +287,14 @@ class TemperaturePoller:
             async with self._condition:
                 self._temperature = temperature
                 self._condition.notify_all()
-            await asyncio.sleep(self._interval)
+            try:
+                await asyncio.wait_for(
+                    self._shutdown_event.wait(),
+                    timeout=self._interval
+                )
+            except asyncio.TimeoutError:
+                # Continue polling
+                pass
+            else:
+                log.debug('Tempdeck poller terminating')
+                break

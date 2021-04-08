@@ -98,7 +98,6 @@ def test_tempdeck(ctx_with_tempdeck):
     mod.set_temperature(20)
     assert 'setting temperature' in ','.join(
         cmd.lower() for cmd in ctx_with_tempdeck.commands())
-
     assert mod.target == 20
     assert mod.temperature == 20
     mod.deactivate()

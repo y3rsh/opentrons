@@ -54,4 +54,5 @@ async def test_cycle(tempdeck) -> None:
             'targetTemp': 23
         }
     }
+    await tempdeck._poller.stop_and_wait()
 
