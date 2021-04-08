@@ -54,7 +54,7 @@ async def test_sim_update(loop, usb_port):
                                interrupt_callback=lambda x: None,
                                loop=loop,
                                execution_manager=ExecutionManager(loop=loop))
-    await asyncio.wait_for(temp.set_temperature(10), 0.2)
+    await temp.set_temperature(10)
     assert temp.temperature == 10
     assert temp.target == 10
     assert temp.status == 'holding at target'
