@@ -1,7 +1,7 @@
 from typing import Optional
 
 from opentrons.drivers.asyncio.thermocycler.abstract import AbstractThermocyclerDriver
-from opentrons.drivers.types import Temperature, PlateTemperature, LidStatus
+from opentrons.drivers.types import Temperature, PlateTemperature, ThermocyclerLidStatus
 
 
 class SimulatingDriver(AbstractThermocyclerDriver):
@@ -10,7 +10,7 @@ class SimulatingDriver(AbstractThermocyclerDriver):
         self._target_temp: Optional[float] = None
         self._ramp_rate: Optional[float] = None
         self._hold_time: Optional[float] = None
-        self._lid_status = LidStatus.OPEN
+        self._lid_status = ThermocyclerLidStatus.OPEN
         self._lid_target: Optional[float] = None
 
     async def connect(self) -> None:
@@ -23,12 +23,12 @@ class SimulatingDriver(AbstractThermocyclerDriver):
         return True
 
     async def open_lid(self) -> None:
-        self._lid_status = LidStatus.OPEN
+        self._lid_status = ThermocyclerLidStatus.OPEN
 
     async def close_lid(self) -> None:
-        self._lid_status = LidStatus.CLOSED
+        self._lid_status = ThermocyclerLidStatus.CLOSED
 
-    async def get_lid_status(self) -> LidStatus:
+    async def get_lid_status(self) -> ThermocyclerLidStatus:
         return self._lid_status
 
     async def get_lid_temperature(self) -> Temperature:

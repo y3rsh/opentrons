@@ -8,7 +8,7 @@ from opentrons.drivers.command_builder import CommandBuilder
 from opentrons.drivers.asyncio.communication.serial_connection import \
     SerialConnection, AsyncSerial
 from opentrons.drivers.asyncio.thermocycler.abstract import AbstractThermocyclerDriver
-from opentrons.drivers.types import Temperature, PlateTemperature, LidStatus
+from opentrons.drivers.types import Temperature, PlateTemperature, ThermocyclerLidStatus
 
 log = logging.getLogger(__name__)
 
@@ -92,7 +92,7 @@ class ThermocyclerDriver(AbstractThermocyclerDriver):
         await self._connection.send_command(
             data=c.build(), retries=DEFAULT_COMMAND_RETRIES)
 
-    async def get_lid_status(self) -> LidStatus:
+    async def get_lid_status(self) -> ThermocyclerLidStatus:
         """Send get lid status command"""
         c = CommandBuilder(
             terminator=TC_COMMAND_TERMINATOR
@@ -101,7 +101,7 @@ class ThermocyclerDriver(AbstractThermocyclerDriver):
         )
         response = await self._connection.send_command(
             data=c.build(), retries=DEFAULT_COMMAND_RETRIES)
-        return LidStatus(utils.parse_key_values(value=response)['Lid'])
+        return ThermocyclerLidStatus(utils.parse_key_values(value=response)['Lid'])
 
     async def set_lid_temperature(self, temp: float) -> None:
         """Set the lid temperature"""

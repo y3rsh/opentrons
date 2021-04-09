@@ -5,7 +5,7 @@ from mock import AsyncMock
 from opentrons.drivers.asyncio.communication.serial_connection import \
     SerialConnection
 from opentrons.drivers.asyncio.thermocycler import driver
-from opentrons.drivers.types import Temperature, PlateTemperature, LidStatus
+from opentrons.drivers.types import Temperature, PlateTemperature, ThermocyclerLidStatus
 
 
 @pytest.fixture
@@ -43,7 +43,7 @@ async def test_get_lid_status(subject: driver.ThermocyclerDriver,
     response = await subject.get_lid_status()
 
     connection.send_command.assert_called_once_with(data="M119 \r\n", retries=3)
-    assert response == LidStatus.OPEN
+    assert response == ThermocyclerLidStatus.OPEN
 
 
 @pytest.mark.parametrize(

@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from typing import Optional, Dict
 
-from opentrons.drivers.types import Temperature, LidStatus, PlateTemperature
+from opentrons.drivers.types import Temperature, ThermocyclerLidStatus, PlateTemperature
 
 
 class AbstractThermocyclerDriver(ABC):
@@ -32,7 +32,7 @@ class AbstractThermocyclerDriver(ABC):
         ...
 
     @abstractmethod
-    async def get_lid_status(self) -> LidStatus:
+    async def get_lid_status(self) -> ThermocyclerLidStatus:
         """Send get lid status command"""
         ...
 

@@ -1,17 +1,11 @@
 import logging
 from typing import Optional, List
 
-from opentrons.drivers.temp_deck.driver import GCODES
+from opentrons.drivers.asyncio.tempdeck.driver import GCODE
 
 from .abstract_emulator import AbstractEmulator
 
 logger = logging.getLogger(__name__)
-
-GCODE_GET_TEMP = GCODES['GET_TEMP']
-GCODE_SET_TEMP = GCODES['SET_TEMP']
-GCODE_DEVICE_INFO = GCODES['DEVICE_INFO']
-GCODE_DISENGAGE = GCODES['DISENGAGE']
-GCODE_DFU = GCODES['PROGRAMMING_MODE']
 
 SERIAL = "fake_serial"
 MODEL = "temp_emulator"
@@ -29,18 +23,18 @@ class TempDeckEmulator(AbstractEmulator):
         """Handle a command."""
         cmd = words[0]
         logger.info(f"Got command {cmd}")
-        if cmd == GCODE_GET_TEMP:
+        if cmd == GCODE.GET_TEMP:
             return f"T:{self.target_temp} C:{self.current_temp}"
-        elif cmd == GCODE_SET_TEMP:
+        elif cmd == GCODE.SET_TEMP:
             assert words[1][0] == 'S'
             self._set_target(float(words[1][1:]))
             pass
-        elif cmd == GCODE_DISENGAGE:
+        elif cmd == GCODE.DISENGAGE:
             self._set_target(23)
             pass
-        elif cmd == GCODE_DEVICE_INFO:
+        elif cmd == GCODE.DEVICE_INFO:
             return f"serial:{SERIAL} model:{MODEL} version:{VERSION}"
-        elif cmd == GCODE_DFU:
+        elif cmd == GCODE.PROGRAMMING_MODE:
             pass
         return None
 
