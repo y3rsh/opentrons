@@ -2,6 +2,7 @@ import logging
 from typing import Optional, List
 
 from opentrons.drivers.asyncio.tempdeck.driver import GCODE
+from opentrons.hardware_control.emulation import util
 
 from .abstract_emulator import AbstractEmulator
 
@@ -26,8 +27,9 @@ class TempDeckEmulator(AbstractEmulator):
         if cmd == GCODE.GET_TEMP:
             return f"T:{self.target_temp} C:{self.current_temp}"
         elif cmd == GCODE.SET_TEMP:
-            assert words[1][0] == 'S'
-            self._set_target(float(words[1][1:]))
+            par = util.parse_parameter(words[1])
+            assert par.prefix == 'S'
+            self._set_target(par.value)
             pass
         elif cmd == GCODE.DISENGAGE:
             self._set_target(23)

@@ -32,9 +32,9 @@ class ThermocyclerEmulator(AbstractEmulator):
         cmd = words[0]
         logger.info(f"Got command {cmd}")
         if cmd == GCODE.OPEN_LID:
-            pass
+            self.lid_status = ThermocyclerLidStatus.OPEN
         elif cmd == GCODE.CLOSE_LID:
-            pass
+            self.lid_status = ThermocyclerLidStatus.CLOSED
         elif cmd == GCODE.GET_LID_STATUS:
             return f"Lid:{self.lid_status}"
         elif cmd == GCODE.SET_LID_TEMP:

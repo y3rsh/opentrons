@@ -2,6 +2,7 @@ import logging
 from typing import Optional, List
 from opentrons.drivers.asyncio.magdeck.driver import GCODE
 from .abstract_emulator import AbstractEmulator
+from . import util
 
 logger = logging.getLogger(__name__)
 
@@ -25,8 +26,9 @@ class MagDeckEmulator(AbstractEmulator):
         if cmd == GCODE.HOME:
             self.height = 0
         elif cmd == GCODE.MOVE:
-            assert words[1][0] == 'Z'
-            self.position = float(words[1][1:])
+            par = util.parse_parameter(words[1])
+            assert par.prefix == 'Z'
+            self.position = par.value
         elif cmd == GCODE.PROBE_PLATE:
             self.height = 45
         elif cmd == GCODE.GET_PLATE_HEIGHT:
