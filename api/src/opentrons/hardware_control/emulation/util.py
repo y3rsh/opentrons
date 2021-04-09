@@ -1,6 +1,9 @@
 import re
 import dataclasses
 
+
+TEMPERATURE_ROOM = 23
+
 PREFIX_NUMBER_RE = re.compile(r"(?P<prefix>[A-Z])(?P<value>-*\d+\.?\d*)")
 
 

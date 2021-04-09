@@ -6,6 +6,7 @@ from opentrons.hardware_control.emulation import util
 
 from .abstract_emulator import AbstractEmulator
 
+
 logger = logging.getLogger(__name__)
 
 SERIAL = "fake_serial"
@@ -32,7 +33,7 @@ class TempDeckEmulator(AbstractEmulator):
             self._set_target(par.value)
             pass
         elif cmd == GCODE.DISENGAGE:
-            self._set_target(23)
+            self._set_target(util.TEMPERATURE_ROOM)
             pass
         elif cmd == GCODE.DEVICE_INFO:
             return f"serial:{SERIAL} model:{MODEL} version:{VERSION}"

@@ -18,15 +18,16 @@ class ThermocyclerEmulator(AbstractEmulator):
 
     def __init__(self) -> None:
         self.lid_target_temp: Optional[float] = None
-        self.lid_current_temp: float = 0
+        self.lid_current_temp: float = util.TEMPERATURE_ROOM
         self.lid_status = ThermocyclerLidStatus.CLOSED
         self.lid_at_target: Optional[bool] = None
         self.plate_total_hold_time: Optional[float] = None
         self.plate_time_remaining: Optional[float] = None
         self.plate_target_temp: Optional[float] = None
-        self.plate_current_temp: float = 0
+        self.plate_current_temp: float = util.TEMPERATURE_ROOM
         self.plate_volume: Optional[float] = None
         self.plate_at_target: Optional[float] = None
+        self.plate_ramp_rate: Optional[float] = None
 
     def handle(self, words: List[str]) -> Optional[str]:  # noqa: C901
         """
@@ -67,7 +68,9 @@ class ThermocyclerEmulator(AbstractEmulator):
                    f"Total_H:{self.plate_total_hold_time} " \
                    f"At_target?:{self.plate_at_target}"
         elif cmd == GCODE.SET_RAMP_RATE:
-            pass
+            par = util.parse_parameter(words[1])
+            assert par.prefix == "S"
+            self.plate_ramp_rate = par.value
         elif cmd == GCODE.DEACTIVATE_ALL:
             pass
         elif cmd == GCODE.DEACTIVATE_LID:
