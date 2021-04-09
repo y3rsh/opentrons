@@ -18,7 +18,7 @@ class TempDeckEmulator(AbstractEmulator):
     """TempDeck emulator"""
 
     def __init__(self) -> None:
-        self.target_temp = 0.0
+        self.target_temp = util.OptionalValue[float]()
         self.current_temp = 0.0
 
     def handle(self, words: List[str]) -> Optional[str]:
@@ -42,5 +42,5 @@ class TempDeckEmulator(AbstractEmulator):
         return None
 
     def _set_target(self, target_temp: float) -> None:
-        self.target_temp = target_temp
-        self.current_temp = self.target_temp
+        self.target_temp.val = target_temp
+        self.current_temp = self.target_temp.val

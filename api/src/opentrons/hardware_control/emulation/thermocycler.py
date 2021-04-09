@@ -17,17 +17,17 @@ class ThermocyclerEmulator(AbstractEmulator):
     """Thermocycler emulator"""
 
     def __init__(self) -> None:
-        self.lid_target_temp: Optional[float] = None
+        self.lid_target_temp = util.OptionalValue[float]()
         self.lid_current_temp: float = util.TEMPERATURE_ROOM
         self.lid_status = ThermocyclerLidStatus.CLOSED
         self.lid_at_target: Optional[bool] = None
-        self.plate_total_hold_time: Optional[float] = None
-        self.plate_time_remaining: Optional[float] = None
-        self.plate_target_temp: Optional[float] = None
+        self.plate_total_hold_time = util.OptionalValue[float]()
+        self.plate_time_remaining = util.OptionalValue[float]()
+        self.plate_target_temp = util.OptionalValue[float]()
         self.plate_current_temp: float = util.TEMPERATURE_ROOM
-        self.plate_volume: Optional[float] = None
-        self.plate_at_target: Optional[float] = None
-        self.plate_ramp_rate: Optional[float] = None
+        self.plate_volume = util.OptionalValue[float]()
+        self.plate_at_target = util.OptionalValue[float]()
+        self.plate_ramp_rate = util.OptionalValue[float]()
 
     def handle(self, words: List[str]) -> Optional[str]:  # noqa: C901
         """
@@ -46,7 +46,8 @@ class ThermocyclerEmulator(AbstractEmulator):
         elif cmd == GCODE.SET_LID_TEMP:
             par = util.parse_parameter(words[1])
             assert par.prefix == "S"
-            self.lid_target_temp = par.value
+            self.lid_target_temp.val = par.value
+            self.lid_current_temp = self.lid_target_temp.val
         elif cmd == GCODE.GET_LID_TEMP:
             return f"T:{self.lid_target_temp} C:{self.lid_current_temp} " \
                    f"H:none Total_H:none At_target?:0"
@@ -56,11 +57,13 @@ class ThermocyclerEmulator(AbstractEmulator):
             pars = (util.parse_parameter(p) for p in words[1:])
             for par in pars:
                 if par.prefix == 'S':
-                    self.plate_target_temp = par.value
+                    self.plate_target_temp.val = par.value
+                    self.plate_current_temp = self.plate_target_temp.val
                 elif par.prefix == 'V':
-                    self.plate_volume = par.value
+                    self.plate_volume.val = par.value
                 elif par.prefix == 'H':
-                    self.plate_total_hold_time = par.value
+                    self.plate_total_hold_time.val = par.value
+                    self.plate_time_remaining.val = par.value
         elif cmd == GCODE.GET_PLATE_TEMP:
             return f"T:{self.plate_target_temp} " \
                    f"C:{self.plate_current_temp} " \
@@ -70,7 +73,7 @@ class ThermocyclerEmulator(AbstractEmulator):
         elif cmd == GCODE.SET_RAMP_RATE:
             par = util.parse_parameter(words[1])
             assert par.prefix == "S"
-            self.plate_ramp_rate = par.value
+            self.plate_ramp_rate.val = par.value
         elif cmd == GCODE.DEACTIVATE_ALL:
             pass
         elif cmd == GCODE.DEACTIVATE_LID:
