@@ -140,27 +140,12 @@ class MagDeck(mod_abc.AbstractModule):
         }
 
     @property
-    def port(self) -> str:
-        return self._port
-
-    @property
-    def usb_port(self) -> USBPort:
-        return self._usb_port
-
-    @property
     def is_simulated(self) -> bool:
         return isinstance(self._driver, SimulatingDriver)
 
     @property
     def interrupt_callback(self) -> types.InterruptCallback:
         return lambda x: None
-
-    @property
-    def loop(self) -> asyncio.AbstractEventLoop:
-        return self._loop
-
-    def set_loop(self, loop: asyncio.AbstractEventLoop):
-        self._loop = loop
 
     # Internal Methods
 

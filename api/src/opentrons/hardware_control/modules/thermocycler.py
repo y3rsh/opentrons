@@ -1,5 +1,6 @@
 import asyncio
 import logging
+from enum import Enum
 from typing import Union, Optional, List, Callable
 from opentrons.drivers.rpi_drivers.types import USBPort
 from ..execution_manager import ExecutionManager
@@ -11,6 +12,14 @@ from opentrons.drivers.thermocycler.driver import (
 
 
 MODULE_LOG = logging.getLogger(__name__)
+
+
+class Status(str, Enum):
+    HOLDING = 'holding at target'
+    COOLING = 'cooling'
+    HEATING = 'heating'
+    IDLE = 'idle'
+    ERROR = 'error'
 
 
 class Thermocycler(mod_abc.AbstractModule):
@@ -39,28 +48,6 @@ class Thermocycler(mod_abc.AbstractModule):
         await mod._connect()
         return mod
 
-    @classmethod
-    def name(cls) -> str:
-        return 'thermocycler'
-
-    def model(self) -> str:
-        return 'thermocyclerModuleV1'
-
-    @classmethod
-    def bootloader(cls) -> types.UploadFunction:
-        return update.upload_via_bossa
-
-    @staticmethod
-    def _build_driver(
-            simulating: bool,
-            sim_model: str = None,
-            interrupt_cb: Callable[[str], None] = None)\
-            -> Union['SimulatingDriver', 'ThermocyclerDriver']:
-        if simulating:
-            return SimulatingDriver(sim_model=sim_model)
-        else:
-            return ThermocyclerDriver(interrupt_cb)
-
     def __init__(self,
                  port: str,
                  usb_port: USBPort,
@@ -85,6 +72,28 @@ class Thermocycler(mod_abc.AbstractModule):
         self._current_cycle_index: Optional[int] = None
         self._total_step_count: Optional[int] = None
         self._current_step_index: Optional[int] = None
+
+    @classmethod
+    def name(cls) -> str:
+        return 'thermocycler'
+
+    def model(self) -> str:
+        return 'thermocyclerModuleV1'
+
+    @classmethod
+    def bootloader(cls) -> types.UploadFunction:
+        return update.upload_via_bossa
+
+    @staticmethod
+    def _build_driver(
+            simulating: bool,
+            sim_model: str = None,
+            interrupt_cb: Callable[[str], None] = None)\
+            -> Union['SimulatingDriver', 'ThermocyclerDriver']:
+        if simulating:
+            return SimulatingDriver(sim_model=sim_model)
+        else:
+            return ThermocyclerDriver(interrupt_cb)
 
     def _clear_cycle_counters(self):
         self._total_cycle_count = None
@@ -322,24 +331,10 @@ class Thermocycler(mod_abc.AbstractModule):
         """
         return self._interrupt_cb
 
-    @property
-    def loop(self):
-        return self._loop
-
-    def set_loop(self, newLoop):
-        self._loop = newLoop
-
     async def _connect(self):
         await self._driver.connect(self._port)
+
         self._device_info = await self._driver.get_device_info()
-
-    @property
-    def port(self):
-        return self._port
-
-    @property
-    def usb_port(self) -> USBPort:
-        return self._usb_port
 
     async def prep_for_update(self):
         await self._driver.enter_programming_mode()

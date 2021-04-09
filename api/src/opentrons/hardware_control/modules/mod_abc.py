@@ -69,8 +69,8 @@ class AbstractModule(abc.ABC):
 
     def has_available_update(self) -> bool:
         """ Return whether a newer firmware file is available """
-        if self._device_info and self._bundled_fw:
-            device_version = parse_version(self._device_info['version'])
+        if self.device_info and self._bundled_fw:
+            device_version = parse_version(self.device_info['version'])
             available_version = parse_version(self._bundled_fw.version)
             return available_version > device_version
         return False
@@ -112,16 +112,14 @@ class AbstractModule(abc.ABC):
         pass
 
     @property
-    @abc.abstractmethod
     def port(self) -> str:
         """ The virtual port where the module is connected. """
-        pass
+        return self._port
 
     @property
-    @abc.abstractmethod
     def usb_port(self) -> USBPort:
         """ The physical port where the module is connected. """
-        pass
+        return self._usb_port
 
     @abc.abstractmethod
     async def prep_for_update(self) -> str:

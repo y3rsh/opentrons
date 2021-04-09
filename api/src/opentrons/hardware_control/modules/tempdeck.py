@@ -72,6 +72,9 @@ class TempDeck(mod_abc.AbstractModule):
             interval_seconds=TEMP_POLL_INTERVAL_SECS
         )
 
+    def __del__(self):
+        self._poller.stop()
+
     @classmethod
     def name(cls) -> str:
         return 'tempdeck'
@@ -119,13 +122,14 @@ class TempDeck(mod_abc.AbstractModule):
 
         await self.wait_for_is_running()
 
-        if self.status == Status.HEATING:
-            while self.temperature < awaiting_temperature:
-                await self._poller.wait_next_poll()
-
-        elif self.status == Status.COOLING:
-            while self.temperature > awaiting_temperature:
-                await self._poller.wait_next_poll()
+        while (
+                self.status == Status.HEATING and
+                self.temperature < awaiting_temperature
+        ) or (
+                self.status == Status.COOLING and
+                self.temperature > awaiting_temperature
+        ):
+            await self._poller.wait_next_poll()
 
     async def deactivate(self):
         """ Stop heating/cooling and turn off the fan """
@@ -159,35 +163,12 @@ class TempDeck(mod_abc.AbstractModule):
         return self._get_status(self._poller.temperature).value
 
     @property
-    def port(self) -> str:
-        return self._port
-
-    @property
-    def usb_port(self) -> USBPort:
-        return self._usb_port
-
-    @property
     def is_simulated(self) -> bool:
         return isinstance(self._driver, SimulatingDriver)
 
     @property
     def interrupt_callback(self) -> types.InterruptCallback:
         return lambda x: None
-
-    @property
-    def loop(self) -> asyncio.AbstractEventLoop:
-        return self._loop
-
-    def set_loop(self, loop: asyncio.AbstractEventLoop):
-        self._loop = loop
-
-    def cleanup(self) -> None:
-        if hasattr(self, '_poller') and self._poller:
-            log.debug("Stopping tempdeck poller.")
-            self._poller.stop()
-
-    def __del__(self):
-        self.cleanup()
 
     async def prep_for_update(self) -> str:
         model = self._device_info and self._device_info.get('model')
@@ -272,6 +253,7 @@ class TemperaturePoller:
 
     async def wait_next_poll(self) -> Temperature:
         """Wait for the next poll result."""
+        # TODO Fail on self._shutdown_event.is_set == True
         async with self._condition:
             await self._condition.wait()
             return self._temperature
