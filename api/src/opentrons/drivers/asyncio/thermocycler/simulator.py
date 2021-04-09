@@ -32,7 +32,8 @@ class SimulatingDriver(AbstractThermocyclerDriver):
         return self._lid_status
 
     async def get_lid_temperature(self) -> Temperature:
-        return Temperature(current=self._lid_target, target=self._lid_target)
+        current = 0 if self._lid_target is None else self._lid_target
+        return Temperature(current=current, target=self._lid_target)
 
     async def set_plate_temperature(self, temp: float,
                                     hold_time: Optional[float] = None,
@@ -41,8 +42,9 @@ class SimulatingDriver(AbstractThermocyclerDriver):
         self._hold_time = hold_time
 
     async def get_plate_temperature(self) -> PlateTemperature:
+        current = 0 if self._target_temp is None else self._target_temp
         return PlateTemperature(
-            current=self._target_temp, target=self._target_temp, hold=self._hold_time)
+            current=current, target=self._target_temp, hold=self._hold_time)
 
     async def set_ramp_rate(self, ramp_rate: float) -> None:
         self._ramp_rate = ramp_rate

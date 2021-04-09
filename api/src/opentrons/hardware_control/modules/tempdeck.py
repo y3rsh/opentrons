@@ -1,14 +1,14 @@
 import asyncio
 import logging
-from typing import Mapping, Union, Optional
+from typing import Mapping, Optional
+from typing_extensions import Final
 from enum import Enum
 from opentrons.drivers.types import Temperature
 from opentrons.drivers.asyncio.tempdeck import (
     SimulatingDriver, AbstractTempDeckDriver, TempDeckDriver)
 from opentrons.drivers.rpi_drivers.types import USBPort
-from opentrons.drivers.temp_deck.driver import temp_locks
-from ..execution_manager import ExecutionManager
-from . import update, mod_abc, types
+from opentrons.hardware_control.execution_manager import ExecutionManager
+from opentrons.hardware_control.modules import update, mod_abc, types
 
 log = logging.getLogger(__name__)
 
@@ -250,7 +250,7 @@ class TempDeck(mod_abc.AbstractModule):
 class TemperaturePoller:
     def __init__(
             self,
-            driver:AbstractTempDeckDriver,
+            driver: AbstractTempDeckDriver,
             interval_seconds: float) -> None:
         """Construct the poller."""
         self._driver = driver

@@ -1,7 +1,5 @@
 import pytest
-import asyncio
 from opentrons.hardware_control import modules, ExecutionManager
-from opentrons.hardware_control.modules import tempdeck
 
 
 from opentrons.drivers.rpi_drivers.types import USBPort
