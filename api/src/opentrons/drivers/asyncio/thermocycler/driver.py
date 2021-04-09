@@ -51,6 +51,23 @@ DEFAULT_COMMAND_RETRIES = 3
 
 
 class ThermocyclerDriver(AbstractThermocyclerDriver):
+
+    @classmethod
+    async def create(cls, port: str) -> 'ThermocyclerDriver':
+        """
+        Create a temp deck driver.
+
+        Args:
+            port: port or url of temp deck
+
+        Returns: driver
+        """
+        connection = await SerialConnection.create(
+            port=port, baud_rate=TC_BAUDRATE,
+            timeout=DEFAULT_TC_TIMEOUT, ack=TC_ACK
+        )
+        return cls(connection=connection)
+
     def __init__(self, connection: SerialConnection) -> None:
         """
         Constructor

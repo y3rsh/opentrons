@@ -119,13 +119,12 @@ class TempDeck(mod_abc.AbstractModule):
 
         await self.wait_for_is_running()
 
-        if self.status == Status.HEATING:
-            while self.temperature < awaiting_temperature:
-                await self._poller.wait_next_poll()
-
-        elif self.status == Status.COOLING:
-            while self.temperature > awaiting_temperature:
-                await self._poller.wait_next_poll()
+        while (
+                self.status == Status.HEATING and self.temperature < awaiting_temperature
+        ) or (
+                self.status == Status.COOLING and self.temperature > awaiting_temperature
+        ):
+            await self._poller.wait_next_poll()
 
     async def deactivate(self):
         """ Stop heating/cooling and turn off the fan """
