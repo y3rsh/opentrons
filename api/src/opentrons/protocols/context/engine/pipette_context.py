@@ -66,7 +66,33 @@ class PipetteContext(AbstractInstrument):
     def dispense(self,
                  volume: float,
                  rate: float) -> None:
-        raise NotImplementedError()
+        if rate != 1:
+            raise NotImplementedError(
+                "Protocol Engine does not yet support adjusting flow rate.")
+
+        # Fix before merge: Consider what "current location" means when there
+        # are two pipettes. I guess if you do left_pipette.move_to(...),
+        # the location of right_pipette gets cleared?
+        #
+        # Fix before merge: Ensure the underlying DispenseRequest
+        # implementation does something reasonable when it's given a location
+        # that exactly matches its current location. (i.e. it doesn't move.)
+        #
+        # Fix before merge: Consider what happens if you dispense to deck
+        # coordinates?
+        current_location = self._engine_client.state
+        current_location = self.current_location  # Fix before merge: Implement.
+        labware_id = "todo"  # Fix before merge: Derive from current_location somehow.
+        well_name = "todo"
+        well_location = "todo"
+
+        self._engine_client.dispense(
+            pipette_id=self._id,
+            labware_id=labware_id,
+            well_name=well_name,
+            well_location=well_location,
+            volume=volume
+        )
 
     def blow_out(self) -> None:
         raise NotImplementedError()
