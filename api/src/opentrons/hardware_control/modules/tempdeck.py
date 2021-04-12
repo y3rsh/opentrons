@@ -158,27 +158,12 @@ class TempDeck(mod_abc.AbstractModule):
         return self._get_status(self._poller.temperature).value
 
     @property
-    def port(self) -> str:
-        return self._port
-
-    @property
-    def usb_port(self) -> USBPort:
-        return self._usb_port
-
-    @property
     def is_simulated(self) -> bool:
         return isinstance(self._driver, SimulatingDriver)
 
     @property
     def interrupt_callback(self) -> types.InterruptCallback:
         return lambda x: None
-
-    @property
-    def loop(self) -> asyncio.AbstractEventLoop:
-        return self._loop
-
-    def set_loop(self, loop: asyncio.AbstractEventLoop):
-        self._loop = loop
 
     def __del__(self):
         self._poller.stop()
@@ -266,6 +251,7 @@ class TemperaturePoller:
 
     async def wait_next_poll(self) -> Temperature:
         """Wait for the next poll result."""
+        # TODO Fail on self._shutdown_event.is_set == True
         async with self._condition:
             await self._condition.wait()
             return self._temperature

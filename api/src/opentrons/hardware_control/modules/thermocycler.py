@@ -1,6 +1,6 @@
 import asyncio
 import logging
-from typing import Union, Optional, List, Callable
+from typing import Union, Optional, List, Callable, Dict
 from opentrons.drivers.rpi_drivers.types import USBPort
 from ..execution_manager import ExecutionManager
 from . import types, update, mod_abc
@@ -322,24 +322,10 @@ class Thermocycler(mod_abc.AbstractModule):
         """
         return self._interrupt_cb
 
-    @property
-    def loop(self):
-        return self._loop
-
-    def set_loop(self, newLoop):
-        self._loop = newLoop
-
     async def _connect(self):
         await self._driver.connect(self._port)
+
         self._device_info = await self._driver.get_device_info()
-
-    @property
-    def port(self):
-        return self._port
-
-    @property
-    def usb_port(self) -> USBPort:
-        return self._usb_port
 
     async def prep_for_update(self):
         await self._driver.enter_programming_mode()

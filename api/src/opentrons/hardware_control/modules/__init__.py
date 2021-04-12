@@ -5,13 +5,11 @@ from .thermocycler import Thermocycler
 from .update import update_firmware
 from .utils import MODULE_HW_BY_NAME, build, get_module_at_port, discover
 from .types import (ThermocyclerStep, InterruptCallback, UploadFunction,
-                    BundledFirmware, UpdateError, UnsupportedModuleError,
-                    AbsentModuleError, ModuleAtPort)
+                    BundledFirmware, UpdateError, ModuleAtPort)
 
 __all__ = [
     'MODULE_HW_BY_NAME', 'build', 'get_module_at_port', 'discover',
     'update_firmware', 'ThermocyclerStep', 'AbstractModule',
     'TempDeck', 'MagDeck', 'Thermocycler', 'InterruptCallback',
-    'UploadFunction', 'BundledFirmware', 'UpdateError',
-    'UnsupportedModuleError', 'AbsentModuleError', 'ModuleAtPort'
+    'UploadFunction', 'BundledFirmware', 'UpdateError', 'ModuleAtPort'
 ]
