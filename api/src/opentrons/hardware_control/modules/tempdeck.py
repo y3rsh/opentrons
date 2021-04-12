@@ -72,6 +72,9 @@ class TempDeck(mod_abc.AbstractModule):
             interval_seconds=TEMP_POLL_INTERVAL_SECS
         )
 
+    def __del__(self):
+        self._poller.stop()
+
     @classmethod
     def name(cls) -> str:
         return 'tempdeck'
@@ -164,9 +167,6 @@ class TempDeck(mod_abc.AbstractModule):
     @property
     def interrupt_callback(self) -> types.InterruptCallback:
         return lambda x: None
-
-    def __del__(self):
-        self._poller.stop()
 
     async def prep_for_update(self) -> str:
         model = self._device_info and self._device_info.get('model')
