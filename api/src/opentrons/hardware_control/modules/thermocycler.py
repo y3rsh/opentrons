@@ -1,7 +1,7 @@
 import asyncio
 import logging
 from enum import Enum
-from typing import Union, Optional, List, Callable, Dict
+from typing import Union, Optional, List, Callable
 from opentrons.drivers.rpi_drivers.types import USBPort
 from ..execution_manager import ExecutionManager
 from . import types, update, mod_abc

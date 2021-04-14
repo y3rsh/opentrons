@@ -123,9 +123,11 @@ class TempDeck(mod_abc.AbstractModule):
         await self.wait_for_is_running()
 
         while (
-                self.status == Status.HEATING and self.temperature < awaiting_temperature
+                self.status == Status.HEATING and
+                self.temperature < awaiting_temperature
         ) or (
-                self.status == Status.COOLING and self.temperature > awaiting_temperature
+                self.status == Status.COOLING and
+                self.temperature > awaiting_temperature
         ):
             await self._poller.wait_next_poll()
 
