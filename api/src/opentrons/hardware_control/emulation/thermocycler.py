@@ -1,7 +1,8 @@
 import logging
-from typing import Optional, List
+from typing import Optional
 from opentrons.drivers.asyncio.thermocycler.driver import GCODE
 from opentrons.drivers.types import ThermocyclerLidStatus
+from opentrons.hardware_control.emulation.parser import Parser, Command
 
 from .abstract_emulator import AbstractEmulator
 from . import util
@@ -28,59 +29,60 @@ class ThermocyclerEmulator(AbstractEmulator):
         self.plate_volume = util.OptionalValue[float]()
         self.plate_at_target = util.OptionalValue[float]()
         self.plate_ramp_rate = util.OptionalValue[float]()
+        self._parser = Parser(gcodes=list(GCODE))
 
-    def handle(self, words: List[str]) -> Optional[str]:  # noqa: C901
+    def handle(self, line: str) -> Optional[str]:
+        """Handle a line"""
+        results = (self._handle(c) for c in self._parser.parse(line))
+        joined = ' '.join(r for r in results if r)
+        return None if not joined else joined
+
+    def _handle(self, command: Command) -> Optional[str]:  # noqa: C901
         """
         Handle a command.
 
         TODO: AL 20210218 create dispatch map and remove 'noqa(C901)'
         """
-        cmd = words[0]
-        logger.info(f"Got command {cmd}")
-        if cmd == GCODE.OPEN_LID:
+        logger.info(f"Got command {command}")
+        if command.gcode == GCODE.OPEN_LID:
             self.lid_status = ThermocyclerLidStatus.OPEN
-        elif cmd == GCODE.CLOSE_LID:
+        elif command.gcode == GCODE.CLOSE_LID:
             self.lid_status = ThermocyclerLidStatus.CLOSED
-        elif cmd == GCODE.GET_LID_STATUS:
+        elif command.gcode == GCODE.GET_LID_STATUS:
             return f"Lid:{self.lid_status}"
-        elif cmd == GCODE.SET_LID_TEMP:
-            par = util.parse_parameter(words[1])
-            assert par.prefix == "S"
-            self.lid_target_temp.val = par.value
+        elif command.gcode == GCODE.SET_LID_TEMP:
+            self.lid_target_temp.val = command.params['S']
             self.lid_current_temp = self.lid_target_temp.val
-        elif cmd == GCODE.GET_LID_TEMP:
+        elif command.gcode == GCODE.GET_LID_TEMP:
             return f"T:{self.lid_target_temp} C:{self.lid_current_temp} " \
                    f"H:none Total_H:none At_target?:0"
-        elif cmd == GCODE.EDIT_PID_PARAMS:
+        elif command.gcode == GCODE.EDIT_PID_PARAMS:
             pass
-        elif cmd == GCODE.SET_PLATE_TEMP:
-            pars = (util.parse_parameter(p) for p in words[1:])
-            for par in pars:
-                if par.prefix == 'S':
-                    self.plate_target_temp.val = par.value
+        elif command.gcode == GCODE.SET_PLATE_TEMP:
+            for prefix, value in command.params.items():
+                if prefix == 'S':
+                    self.plate_target_temp.val = value
                     self.plate_current_temp = self.plate_target_temp.val
-                elif par.prefix == 'V':
-                    self.plate_volume.val = par.value
-                elif par.prefix == 'H':
-                    self.plate_total_hold_time.val = par.value
-                    self.plate_time_remaining.val = par.value
-        elif cmd == GCODE.GET_PLATE_TEMP:
+                elif prefix == 'V':
+                    self.plate_volume.val = value
+                elif prefix == 'H':
+                    self.plate_total_hold_time.val = value
+                    self.plate_time_remaining.val = value
+        elif command.gcode == GCODE.GET_PLATE_TEMP:
             return f"T:{self.plate_target_temp} " \
                    f"C:{self.plate_current_temp} " \
                    f"H:{self.plate_time_remaining} " \
                    f"Total_H:{self.plate_total_hold_time} " \
                    f"At_target?:{self.plate_at_target}"
-        elif cmd == GCODE.SET_RAMP_RATE:
-            par = util.parse_parameter(words[1])
-            assert par.prefix == "S"
-            self.plate_ramp_rate.val = par.value
-        elif cmd == GCODE.DEACTIVATE_ALL:
+        elif command.gcode == GCODE.SET_RAMP_RATE:
+            self.plate_ramp_rate.val = command.params['S']
+        elif command.gcode == GCODE.DEACTIVATE_ALL:
             pass
-        elif cmd == GCODE.DEACTIVATE_LID:
+        elif command.gcode == GCODE.DEACTIVATE_LID:
             pass
-        elif cmd == GCODE.DEACTIVATE_BLOCK:
+        elif command.gcode == GCODE.DEACTIVATE_BLOCK:
             pass
-        elif cmd == GCODE.DEVICE_INFO:
+        elif command.gcode == GCODE.DEVICE_INFO:
             return f"serial:{SERIAL} model:{MODEL} version:{VERSION}"
         return None
 

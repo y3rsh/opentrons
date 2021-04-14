@@ -1,8 +1,9 @@
 import logging
-from typing import Optional, List
+from typing import Optional
 
 from opentrons.drivers.asyncio.tempdeck.driver import GCODE
 from opentrons.hardware_control.emulation import util
+from opentrons.hardware_control.emulation.parser import Parser, Command
 
 from .abstract_emulator import AbstractEmulator
 
@@ -20,24 +21,26 @@ class TempDeckEmulator(AbstractEmulator):
     def __init__(self) -> None:
         self.target_temp = util.OptionalValue[float]()
         self.current_temp = 0.0
+        self._parser = Parser(gcodes=list(GCODE))
 
-    def handle(self, words: List[str]) -> Optional[str]:
+    def handle(self, line: str) -> Optional[str]:
+        """Handle a line"""
+        results = (self._handle(c) for c in self._parser.parse(line))
+        joined = ' '.join(r for r in results if r)
+        return None if not joined else joined
+
+    def _handle(self, command: Command) -> Optional[str]:
         """Handle a command."""
-        cmd = words[0]
-        logger.info(f"Got command {cmd}")
-        if cmd == GCODE.GET_TEMP:
+        logger.info(f"Got command {command}")
+        if command.gcode == GCODE.GET_TEMP:
             return f"T:{self.target_temp} C:{self.current_temp}"
-        elif cmd == GCODE.SET_TEMP:
-            par = util.parse_parameter(words[1])
-            assert par.prefix == 'S'
-            self._set_target(par.value)
-            pass
-        elif cmd == GCODE.DISENGAGE:
+        elif command.gcode == GCODE.SET_TEMP:
+            self._set_target(command.params['S'])
+        elif command.gcode == GCODE.DISENGAGE:
             self._set_target(util.TEMPERATURE_ROOM)
-            pass
-        elif cmd == GCODE.DEVICE_INFO:
+        elif command.gcode == GCODE.DEVICE_INFO:
             return f"serial:{SERIAL} model:{MODEL} version:{VERSION}"
-        elif cmd == GCODE.PROGRAMMING_MODE:
+        elif command.gcode == GCODE.PROGRAMMING_MODE:
             pass
         return None
 
