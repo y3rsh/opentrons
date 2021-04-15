@@ -1,8 +1,9 @@
 import asyncio
 import logging
 from typing import Mapping, Optional
+
+from opentrons.hardware_control.modules.types import TemperatureStatus
 from typing_extensions import Final
-from enum import Enum
 from opentrons.drivers.types import Temperature
 from opentrons.drivers.asyncio.tempdeck import (
     SimulatingDriver, AbstractTempDeckDriver, TempDeckDriver)
@@ -13,13 +14,6 @@ from opentrons.hardware_control.modules import update, mod_abc, types
 log = logging.getLogger(__name__)
 
 TEMP_POLL_INTERVAL_SECS = 1
-
-
-class Status(str, Enum):
-    HOLDING = 'holding at target'
-    COOLING = 'cooling'
-    HEATING = 'heating'
-    IDLE = 'idle'
 
 
 class TempDeck(mod_abc.AbstractModule):
@@ -97,7 +91,7 @@ class TempDeck(mod_abc.AbstractModule):
         await self.wait_for_is_running()
         await self._driver.set_temperature(celsius=celsius)
         # Wait until we reach the target temperature.
-        while self.status != Status.HOLDING:
+        while self.status != TemperatureStatus.HOLDING:
             await self._poller.wait_next_poll()
 
     async def start_set_temperature(self, celsius) -> None:
@@ -123,10 +117,10 @@ class TempDeck(mod_abc.AbstractModule):
         await self.wait_for_is_running()
 
         while (
-                self.status == Status.HEATING and
+                self.status == TemperatureStatus.HEATING and
                 self.temperature < awaiting_temperature
         ) or (
-                self.status == Status.COOLING and
+                self.status == TemperatureStatus.COOLING and
                 self.temperature > awaiting_temperature
         ):
             await self._poller.wait_next_poll()
@@ -192,7 +186,7 @@ class TempDeck(mod_abc.AbstractModule):
         return super().has_available_update()
 
     @staticmethod
-    def _get_status(temperature: Temperature) -> Status:
+    def _get_status(temperature: Temperature) -> TemperatureStatus:
         """
         Determine the status from the temperature.
 
@@ -203,15 +197,15 @@ class TempDeck(mod_abc.AbstractModule):
             The status
         """
         DELTA: Final = 0.7
-        status = Status.IDLE
+        status = TemperatureStatus.IDLE
         if temperature.target is not None:
             diff = temperature.target - temperature.current
             if abs(diff) < DELTA:  # To avoid status fluctuation near target
-                status = Status.HOLDING
+                status = TemperatureStatus.HOLDING
             elif diff < 0:
-                status = Status.COOLING
+                status = TemperatureStatus.COOLING
             else:
-                status = Status.HEATING
+                status = TemperatureStatus.HEATING
         return status
 
     @staticmethod

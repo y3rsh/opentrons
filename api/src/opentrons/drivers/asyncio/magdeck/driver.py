@@ -13,7 +13,7 @@ from enum import Enum
 
 from opentrons.drivers import utils
 from opentrons.drivers.command_builder import CommandBuilder
-from opentrons.drivers.asyncio.communication.serial_connection import SerialConnection
+from opentrons.drivers.asyncio.communication import SerialConnection
 from opentrons.drivers.asyncio.magdeck.abstract import AbstractMagDeckDriver
 
 log = logging.getLogger(__name__)

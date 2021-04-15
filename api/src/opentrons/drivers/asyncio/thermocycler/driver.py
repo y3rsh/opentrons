@@ -5,8 +5,9 @@ from typing import Optional, Dict
 
 from opentrons.drivers import utils
 from opentrons.drivers.command_builder import CommandBuilder
-from opentrons.drivers.asyncio.communication.serial_connection import \
+from opentrons.drivers.asyncio.communication import (
     SerialConnection, AsyncSerial
+)
 from opentrons.drivers.asyncio.thermocycler.abstract import AbstractThermocyclerDriver
 from opentrons.drivers.types import Temperature, PlateTemperature, ThermocyclerLidStatus
 

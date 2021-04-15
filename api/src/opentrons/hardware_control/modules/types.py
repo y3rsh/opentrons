@@ -88,3 +88,11 @@ class ModuleInfo(NamedTuple):
 
 ModuleModel = Union[
     MagneticModuleModel, TemperatureModuleModel, ThermocyclerModuleModel]
+
+
+class TemperatureStatus(str, Enum):
+    HOLDING = 'holding at target'
+    COOLING = 'cooling'
+    HEATING = 'heating'
+    IDLE = 'idle'
+    ERROR = 'error'
