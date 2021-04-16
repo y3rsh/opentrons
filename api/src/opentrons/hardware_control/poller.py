@@ -1,6 +1,7 @@
 import asyncio
 from abc import abstractmethod, ABC
-from typing import TypeVar, Generic
+from collections import deque
+from typing import TypeVar, Generic, Optional, Deque
 
 DataT = TypeVar("DataT")
 
@@ -55,7 +56,51 @@ class Listener(ABC, Generic[DataT]):
         ...
 
 
+class WaitableListener(Listener[DataT]):
+    """A listener that can be waited on."""
+
+    def __init__(self) -> None:
+        """Constructor."""
+        self._futures: Deque[asyncio.Future] = deque()
+
+    async def wait_next_poll(self) -> DataT:
+        """
+        Wait for the next poll.
+
+        Returns: The next poll result.
+        """
+        f = asyncio.get_running_loop().create_future()
+        self._futures.append(f)
+        return await f
+
+    def on_poll(self, result: DataT) -> None:
+        """Handle a new poll"""
+        self._notify(result)
+
+    def on_error(self, exc: Exception) -> None:
+        """Handle a poller error."""
+        self._cancel(exc)
+
+    def on_terminated(self) -> None:
+        """Handle the poller finishing up."""
+        self._cancel(Exception("Poller has terminated."))
+
+    def _notify(self, val: DataT) -> None:
+        """Notify all futures of a new poll result."""
+        while self._futures:
+            f = self._futures.popleft()
+            f.set_result(val)
+
+    def _cancel(self, exc: Exception) -> None:
+        """Notify all futures of an error."""
+        while self._futures:
+            f = self._futures.popleft()
+            f.set_exception(exc)
+
+
 class Poller(Generic[DataT]):
+    """Asyncio poller."""
+
     def __init__(
             self,
             interval_seconds: float,
@@ -66,8 +111,8 @@ class Poller(Generic[DataT]):
 
         Args:
             interval_seconds: time in between polls.
-            reader: the poll result reader
-            listener: event listener
+            reader: The data reader.
+            listener: event listener.
         """
         self._shutdown_event = asyncio.Event()
         self._interval = interval_seconds
@@ -101,4 +146,3 @@ class Poller(Generic[DataT]):
                 break
 
         self._listener.on_terminated()
-
