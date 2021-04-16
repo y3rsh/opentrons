@@ -36,18 +36,20 @@ async def test_lid(loop):
                                 loop=loop,
                                 execution_manager=ExecutionManager(loop=loop))
 
-    assert therm.lid_status == 'open'
-
     await therm.open()
+    await therm.wait_next_poll()
     assert therm.lid_status == 'open'
 
     await therm.close()
+    await therm.wait_next_poll()
     assert therm.lid_status == 'closed'
 
     await therm.close()
+    await therm.wait_next_poll()
     assert therm.lid_status == 'closed'
 
     await therm.open()
+    await therm.wait_next_poll()
     assert therm.lid_status == 'open'
 
 
@@ -62,7 +64,7 @@ async def test_sim_state(loop, usb_port):
 
     assert therm.temperature is None
     assert therm.target is None
-    assert therm.status == 'idle'
+    assert therm.status == 'error'
     assert therm.live_data['status'] == therm.status
     assert therm.live_data['data']['currentTemp'] == therm.temperature
     assert therm.live_data['data']['targetTemp'] == therm.target
@@ -83,8 +85,9 @@ async def test_sim_update(loop, usb_port):
 
     await therm.set_temperature(temperature=10,
                                 hold_time_seconds=None,
-                                hold_time_minutes=4.0,
+                                hold_time_minutes=None,
                                 volume=50)
+    # await therm.wait_next_poll()
     assert therm.temperature == 10
     assert therm.target == 10
     assert therm.status == 'holding at target'

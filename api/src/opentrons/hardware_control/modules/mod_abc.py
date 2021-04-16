@@ -45,7 +45,6 @@ class AbstractModule(abc.ABC):
         self._usb_port = usb_port
         self._loop = use_or_initialize_loop(loop)
         self._execution_manager = execution_manager
-        self._device_info: Mapping[str, str]
         self._bundled_fw: Optional[BundledFirmware] = self.get_bundled_fw()
 
     def get_bundled_fw(self) -> Optional[BundledFirmware]:
@@ -132,11 +131,6 @@ class AbstractModule(abc.ABC):
 
         :returns str: The port we're running on.
         """
-        pass
-
-    @property
-    @abc.abstractmethod
-    def interrupt_callback(self) -> InterruptCallback:
         pass
 
     @property

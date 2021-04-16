@@ -3,6 +3,7 @@ import logging
 from typing import Mapping, Optional
 
 from opentrons.hardware_control.modules.types import TemperatureStatus
+from opentrons.hardware_control.poller import Reader, WaitableListener, Poller
 from typing_extensions import Final
 from opentrons.drivers.types import Temperature
 from opentrons.drivers.asyncio.tempdeck import (
@@ -13,7 +14,8 @@ from opentrons.hardware_control.modules import update, mod_abc, types
 
 log = logging.getLogger(__name__)
 
-TEMP_POLL_INTERVAL_SECS = 1
+TEMP_POLL_INTERVAL_SECS = 1.0
+SIM_TEMP_POLL_INTERVAL_SECS = 0.001
 
 
 class TempDeck(mod_abc.AbstractModule):
@@ -35,15 +37,18 @@ class TempDeck(mod_abc.AbstractModule):
         driver: AbstractTempDeckDriver
         if not simulating:
             driver = await TempDeckDriver.create(port=port)
+            polling_frequency = SIM_TEMP_POLL_INTERVAL_SECS
         else:
             driver = SimulatingDriver(sim_model=sim_model)
+            polling_frequency = TEMP_POLL_INTERVAL_SECS
 
         mod = cls(port=port,
                   usb_port=usb_port,
                   execution_manager=execution_manager,
                   driver=driver,
                   device_info=await driver.get_device_info(),
-                  loop=loop)
+                  loop=loop,
+                  polling_frequency=polling_frequency)
         return mod
 
     def __init__(self,
@@ -52,7 +57,8 @@ class TempDeck(mod_abc.AbstractModule):
                  execution_manager: ExecutionManager,
                  driver: AbstractTempDeckDriver,
                  device_info: Mapping[str, str],
-                 loop: asyncio.AbstractEventLoop = None
+                 loop: asyncio.AbstractEventLoop = None,
+                 polling_frequency: float = TEMP_POLL_INTERVAL_SECS
                  ) -> None:
         """Constructor"""
         super().__init__(port=port,
@@ -61,9 +67,11 @@ class TempDeck(mod_abc.AbstractModule):
                          execution_manager=execution_manager)
         self._device_info = device_info
         self._driver = driver
-        self._poller = TemperaturePoller(
-            driver=self._driver,
-            interval_seconds=TEMP_POLL_INTERVAL_SECS
+        self._listener = TempdeckListener()
+        self._poller = Poller(
+            reader=PollerReader(driver=self._driver),
+            interval_seconds=polling_frequency,
+            listener=self._listener
         )
 
     def __del__(self):
@@ -80,6 +88,10 @@ class TempDeck(mod_abc.AbstractModule):
     def bootloader(cls) -> mod_abc.UploadFunction:
         return update.upload_via_avrdude
 
+    async def wait_next_poll(self) -> None:
+        """Wait for the next poll to complete."""
+        await self._listener.wait_next_poll()
+
     async def set_temperature(self, celsius: float) -> None:
         """
         Set temperature in degree Celsius
@@ -92,7 +104,7 @@ class TempDeck(mod_abc.AbstractModule):
         await self._driver.set_temperature(celsius=celsius)
         # Wait until we reach the target temperature.
         while self.status != TemperatureStatus.HOLDING:
-            await self._poller.wait_next_poll()
+            await self.wait_next_poll()
 
     async def start_set_temperature(self, celsius) -> None:
         """
@@ -123,7 +135,7 @@ class TempDeck(mod_abc.AbstractModule):
                 self.status == TemperatureStatus.COOLING and
                 self.temperature > awaiting_temperature
         ):
-            await self._poller.wait_next_poll()
+            await self.wait_next_poll()
 
     async def deactivate(self):
         """ Stop heating/cooling and turn off the fan """
@@ -146,23 +158,19 @@ class TempDeck(mod_abc.AbstractModule):
 
     @property
     def temperature(self) -> float:
-        return self._poller.temperature.current
+        return self._listener.state.current
 
     @property
     def target(self) -> Optional[float]:
-        return self._poller.temperature.target
+        return self._listener.state.target
 
     @property
     def status(self) -> str:
-        return self._get_status(self._poller.temperature).value
+        return self._get_status(self._listener.state).value
 
     @property
     def is_simulated(self) -> bool:
         return isinstance(self._driver, SimulatingDriver)
-
-    @property
-    def interrupt_callback(self) -> types.InterruptCallback:
-        return lambda x: None
 
     async def prep_for_update(self) -> str:
         model = self._device_info and self._device_info.get('model')
@@ -227,55 +235,36 @@ class TempDeck(mod_abc.AbstractModule):
             return 'temperatureModuleV2'
 
 
-class TemperaturePoller:
-    def __init__(
-            self,
-            driver: AbstractTempDeckDriver,
-            interval_seconds: float) -> None:
-        """Construct the poller."""
+class PollerReader(Reader[Temperature]):
+    """Polled data reader."""
+
+    def __init__(self, driver: AbstractTempDeckDriver) -> None:
+        """Constructor."""
         self._driver = driver
-        self._condition = asyncio.Condition()
-        self._shutdown_event = asyncio.Event()
-        self._temperature = Temperature(current=25, target=None)
-        self._interval = interval_seconds
-        self._task = asyncio.create_task(self._poller())
+
+    async def read(self) -> Temperature:
+        """Poll the tempdeck."""
+        return await self._driver.get_temperature()
+
+
+class TempdeckListener(WaitableListener[Temperature]):
+    """Tempdeck state listener."""
+    def __init__(self, interrupt_callback: types.InterruptCallback = None) -> None:
+        """Constructor."""
+        super().__init__()
+        self._callback = interrupt_callback
+        self._polled_data = Temperature(current=25, target=None)
 
     @property
-    def temperature(self) -> Temperature:
-        """Get the most recent temperature."""
-        return self._temperature
+    def state(self) -> Temperature:
+        return self._polled_data
 
-    async def wait_next_poll(self) -> Temperature:
-        """Wait for the next poll result."""
-        # TODO Fail on self._shutdown_event.is_set == True
-        async with self._condition:
-            await self._condition.wait()
-            return self._temperature
+    def on_poll(self, result: Temperature) -> None:
+        """On new poll."""
+        self._polled_data = result
+        return super().on_poll(result)
 
-    def stop(self) -> None:
-        """Stop the poller."""
-        self._shutdown_event.set()
-
-    async def stop_and_wait(self) -> None:
-        """Stop the poller and wait for it to complete."""
-        self.stop()
-        await self._task
-
-    async def _poller(self) -> None:
-        """Poll the temperature. This is the task entry point."""
-        while True:
-            temperature = await self._driver.get_temperature()
-            async with self._condition:
-                self._temperature = temperature
-                self._condition.notify_all()
-            try:
-                await asyncio.wait_for(
-                    self._shutdown_event.wait(),
-                    timeout=self._interval
-                )
-            except asyncio.TimeoutError:
-                # Continue polling
-                pass
-            else:
-                log.debug('Tempdeck poller terminating')
-                break
+    def on_error(self, exc: Exception) -> None:
+        """On error."""
+        if self._callback:
+            self._callback(str(exc))
