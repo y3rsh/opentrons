@@ -26,6 +26,7 @@ MODULE_LOG = logging.getLogger(__name__)
 
 POLLING_FREQUENCY_SEC = 1
 
+
 class Thermocycler(mod_abc.AbstractModule):
     """
     Under development. API subject to change without a version bump
@@ -261,7 +262,7 @@ class Thermocycler(mod_abc.AbstractModule):
             await asyncio.sleep(hold_time)
         else:
             while self.hold_time != 0:
-                await asyncio.sleep(0.1)
+                await self._listener.wait_next_poll()
 
     @property
     def lid_target(self) -> Optional[float]:
@@ -430,6 +431,7 @@ class PollerReader(Reader[PolledData]):
 
 class ThermocyclerListener(WaitableListener[PolledData]):
     """Thermocycler state listener."""
+
     def __init__(self, interrupt_callback: types.InterruptCallback = None) -> None:
         """Constructor."""
         super().__init__()
