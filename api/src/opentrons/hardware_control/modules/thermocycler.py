@@ -24,6 +24,7 @@ from opentrons.drivers.asyncio.thermocycler import (
 
 MODULE_LOG = logging.getLogger(__name__)
 
+POLLING_FREQUENCY_SEC = 1
 
 class Thermocycler(mod_abc.AbstractModule):
     """
@@ -84,7 +85,7 @@ class Thermocycler(mod_abc.AbstractModule):
         self._device_info = device_info
         self._listener = ThermocyclerListener(interrupt_callback=interrupt_callback)
         self._poller = Poller(
-            interval_seconds=.00001, listener=self._listener,
+            interval_seconds=POLLING_FREQUENCY_SEC, listener=self._listener,
             reader=PollerReader(driver=self._driver)
         )
         self._interrupt_cb = interrupt_callback
