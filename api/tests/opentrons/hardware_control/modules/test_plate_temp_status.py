@@ -2,10 +2,9 @@ from typing import List
 
 import pytest
 from opentrons.drivers.types import Temperature, PlateTemperature
-from opentrons.hardware_control.modules.thermocycler_.plate_temp_status import \
+from opentrons.hardware_control.modules.plate_temp_status import \
     PlateTemperatureStatus
-from opentrons.hardware_control.modules.thermocycler_.lid_temp_status import \
-    TemperatureStatus
+from opentrons.hardware_control.modules.types import TemperatureStatus
 
 
 @pytest.mark.parametrize(

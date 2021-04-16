@@ -2,8 +2,7 @@ from collections import deque
 from typing import Deque
 
 from opentrons.drivers.types import PlateTemperature
-from opentrons.hardware_control.modules.thermocycler_.types import \
-    TemperatureStatus
+from opentrons.hardware_control.modules.types import TemperatureStatus
 
 
 class PlateTemperatureStatus:

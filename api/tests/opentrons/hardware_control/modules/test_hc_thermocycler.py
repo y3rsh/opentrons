@@ -3,12 +3,9 @@ from typing import List
 import pytest
 import asyncio
 import mock
-from opentrons.drivers.types import Temperature, PlateTemperature
 from opentrons.hardware_control import modules, ExecutionManager
 
 from opentrons.drivers.rpi_drivers.types import USBPort
-from opentrons.hardware_control.modules.thermocycler_ import TemperatureStatus, \
-    LidTemperatureStatus, PlateTemperatureStatus
 
 
 @pytest.fixture
