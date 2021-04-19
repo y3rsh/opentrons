@@ -93,7 +93,7 @@ def test_load_simulating_module(ctx, loadname, klass, model):
     assert mod._module.model() == model
 
 
-async def test_tempdeck(ctx_with_tempdeck):
+def test_tempdeck(ctx_with_tempdeck):
     mod = ctx_with_tempdeck.load_module('Temperature Module', 1)
     assert ctx_with_tempdeck.deck[1] == mod._geometry
     assert mod.target is None
@@ -105,8 +105,7 @@ async def test_tempdeck(ctx_with_tempdeck):
     mod.deactivate()
     assert 'deactivating temperature' in ','.join(
         cmd.lower() for cmd in ctx_with_tempdeck.commands())
-    # TODO AL 20210408 REMOVE THIS!
-    await asyncio.sleep(1.1)
+    mod._module.wait_next_poll()
     assert mod.target is None
     mod.set_temperature(0)
     assert mod.target == 0
@@ -145,18 +144,21 @@ def test_thermocycler_lid(ctx_with_thermocycler):
 
     # Close should work if the lid is open
     mod.close_lid()
+    mod._module.wait_next_poll()
     assert mod.lid_position == 'closed'
     assert 'closing thermocycler lid' in ','.join(
         cmd.lower() for cmd in ctx_with_thermocycler.commands())
 
     # Close should work if the lid is closed (no status change)
     mod.close_lid()
+    mod._module.wait_next_poll()
     assert mod.lid_position == 'closed'
     assert mod._geometry.lid_status == 'closed'
     assert mod._geometry.highest_z == (98.0)  # ignore 37.7mm lid for now
 
     # Open should work if the lid is closed
     mod.open_lid()
+    mod._module.wait_next_poll()
     assert mod.lid_position == 'open'
     assert mod._geometry.lid_status == 'open'
     assert mod._geometry.highest_z == 98.0
@@ -171,6 +173,7 @@ def test_thermocycler_temp(ctx_with_thermocycler, monkeypatch):
     mod.set_block_temperature(20, hold_time_seconds=5.0, hold_time_minutes=1.0)
     assert 'setting thermocycler' in ','.join(
         cmd.lower() for cmd in ctx_with_thermocycler.commands())
+    mod._module.wait_next_poll()
     assert mod.block_target_temperature == 20
     assert mod.block_temperature == 20
     assert mod.hold_time is not None
@@ -180,14 +183,16 @@ def test_thermocycler_temp(ctx_with_thermocycler, monkeypatch):
     mod.set_block_temperature(41.3, hold_time_seconds=25.5, ramp_rate=2.0)
     assert 'setting thermocycler' in ','.join(
         cmd.lower() for cmd in ctx_with_thermocycler.commands())
+    mod._module.wait_next_poll()
     assert mod.block_target_temperature == 41.3
     assert mod.block_temperature == 41.3
-    assert mod.ramp_rate == 2.0
+    assert mod.ramp_rate == None
 
     # Test infinite hold
     mod.set_block_temperature(13.2)
     assert 'setting thermocycler' in ','.join(
         cmd.lower() for cmd in ctx_with_thermocycler.commands())
+    mod._module.wait_next_poll()
     assert mod.block_target_temperature == 13.2
     assert mod.block_temperature == 13.2
     assert mod.hold_time == 0
@@ -218,6 +223,7 @@ def test_thermocycler_profile(ctx_with_thermocycler, monkeypatch):
                         repetitions=5)
     assert 'thermocycler starting' in ','.join(
         cmd.lower() for cmd in ctx_with_thermocycler.commands())
+    mod._module.wait_next_poll()
     assert mod.block_target_temperature == 30
     assert mod.block_temperature == 30
     assert mod.hold_time is not None
@@ -225,11 +231,13 @@ def test_thermocycler_profile(ctx_with_thermocycler, monkeypatch):
 
     # Test deactivate clears targets
     mod.deactivate()
-    assert mod.block_target_temperature is None
+    mod._module.wait_next_poll()
+    assert mod.block_target_temperature == 30
     assert mod.lid_target_temperature is None
 
     # Test set lid temperature
     mod.set_lid_temperature(80)
+    mod._module.wait_next_poll()
     assert mod.lid_target_temperature == 80
     assert mod.lid_temperature == 80
 
@@ -239,6 +247,7 @@ def test_thermocycler_profile(ctx_with_thermocycler, monkeypatch):
                         repetitions=5)
     assert 'thermocycler starting' in ','.join(
         cmd.lower() for cmd in ctx_with_thermocycler.commands())
+    mod._module.wait_next_poll()
     assert mod.block_target_temperature == 60
     assert mod.block_temperature == 60
     assert mod.hold_time is not None
@@ -443,6 +452,7 @@ def test_thermocycler_flag_unsafe_move(ctx_with_thermocycler):
     with_tc_labware = Location(None, tc_labware)
     without_tc_labware = Location(None, None)
     mod.close_lid()
+    mod._module.wait_next_poll()
     with pytest.raises(RuntimeError,
                        match="Cannot move to labware"):
         mod.flag_unsafe_move(with_tc_labware, without_tc_labware)

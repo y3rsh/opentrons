@@ -351,15 +351,6 @@ class Thermocycler(mod_abc.AbstractModule):
     def is_simulated(self):
         return isinstance(self._driver, SimulatingDriver)
 
-    @property
-    def interrupt_callback(self):
-        """ Fetch the current interrupt callback
-
-        Exposes the interrupt callback used with the TCPoller, so it can be re-
-        hooked in the new module instance after a firmware update.
-        """
-        return self._interrupt_cb
-
     async def prep_for_update(self):
         await self._driver.enter_programming_mode()
 
@@ -372,7 +363,7 @@ class Thermocycler(mod_abc.AbstractModule):
             step: types.ThermocyclerStep,
             volume: Optional[float]) -> None:
         """
-        Execute a themrocycler step.
+        Execute a thermocycler step.
 
         Args:
             step: The set temperature parameters.

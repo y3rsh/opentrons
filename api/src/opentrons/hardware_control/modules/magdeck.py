@@ -143,10 +143,6 @@ class MagDeck(mod_abc.AbstractModule):
     def is_simulated(self) -> bool:
         return isinstance(self._driver, SimulatingDriver)
 
-    @property
-    def interrupt_callback(self) -> types.InterruptCallback:
-        return lambda x: None
-
     # Internal Methods
 
     async def prep_for_update(self) -> str:

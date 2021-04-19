@@ -172,10 +172,6 @@ class TempDeck(mod_abc.AbstractModule):
     def is_simulated(self) -> bool:
         return isinstance(self._driver, SimulatingDriver)
 
-    @property
-    def interrupt_callback(self) -> types.InterruptCallback:
-        return lambda x: None
-
     async def prep_for_update(self) -> str:
         model = self._device_info and self._device_info.get('model')
         if model in ('temp_deck_v1', 'temp_deck_v1.1', 'temp_deck_v2'):
