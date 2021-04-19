@@ -1,6 +1,6 @@
 import asyncio
 import logging
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict, Mapping
 from dataclasses import dataclass
 from opentrons.drivers.rpi_drivers.types import USBPort
 from opentrons.drivers.types import ThermocyclerLidStatus, Temperature, \
@@ -24,7 +24,7 @@ from opentrons.drivers.asyncio.thermocycler import (
 
 MODULE_LOG = logging.getLogger(__name__)
 
-POLLING_FREQUENCY_SEC = 1
+POLLING_FREQUENCY_SEC = 1.0
 SIM_POLLING_FREQUENCY_SEC = 0.001
 
 
@@ -69,7 +69,7 @@ class Thermocycler(mod_abc.AbstractModule):
                  device_info: Dict[str, str],
                  interrupt_callback: types.InterruptCallback = None,
                  loop: asyncio.AbstractEventLoop = None,
-                 polling_interval: int = POLLING_FREQUENCY_SEC
+                 polling_interval: float = POLLING_FREQUENCY_SEC
                  ) -> None:
         """
         Constructor
@@ -305,11 +305,11 @@ class Thermocycler(mod_abc.AbstractModule):
         return self._listener.state.plate_temperature.target if self._listener.state else None
 
     @property
-    def status(self) -> Optional[str]:
+    def status(self) -> str:
         return self._listener.plate_status
 
     @property
-    def device_info(self) -> Dict[str, str]:
+    def device_info(self) -> Mapping[str, str]:
         return self._device_info
 
     @property

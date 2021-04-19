@@ -14,7 +14,7 @@ from opentrons.hardware_control.modules import update, mod_abc, types
 
 log = logging.getLogger(__name__)
 
-TEMP_POLL_INTERVAL_SECS = 1
+TEMP_POLL_INTERVAL_SECS = 1.0
 SIM_TEMP_POLL_INTERVAL_SECS = 0.001
 
 
@@ -58,7 +58,7 @@ class TempDeck(mod_abc.AbstractModule):
                  driver: AbstractTempDeckDriver,
                  device_info: Mapping[str, str],
                  loop: asyncio.AbstractEventLoop = None,
-                 polling_frequency: int = TEMP_POLL_INTERVAL_SECS
+                 polling_frequency: float = TEMP_POLL_INTERVAL_SECS
                  ) -> None:
         """Constructor"""
         super().__init__(port=port,
