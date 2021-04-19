@@ -25,6 +25,7 @@ from opentrons.drivers.asyncio.thermocycler import (
 MODULE_LOG = logging.getLogger(__name__)
 
 POLLING_FREQUENCY_SEC = 1
+SIM_POLLING_FREQUENCY_SEC = 0.001
 
 
 class Thermocycler(mod_abc.AbstractModule):
@@ -45,8 +46,10 @@ class Thermocycler(mod_abc.AbstractModule):
         driver: AbstractThermocyclerDriver
         if not simulating:
             driver = await ThermocyclerDriver.create(port=port)
+            polling_frequency = POLLING_FREQUENCY_SEC
         else:
             driver = SimulatingDriver()
+            polling_frequency = SIM_POLLING_FREQUENCY_SEC
 
         mod = cls(port=port,
                   usb_port=usb_port,
@@ -54,7 +57,8 @@ class Thermocycler(mod_abc.AbstractModule):
                   device_info=await driver.get_device_info(),
                   interrupt_callback=interrupt_callback,
                   loop=loop,
-                  execution_manager=execution_manager)
+                  execution_manager=execution_manager,
+                  polling_interval=polling_frequency)
         return mod
 
     def __init__(self,
@@ -64,7 +68,8 @@ class Thermocycler(mod_abc.AbstractModule):
                  driver: AbstractThermocyclerDriver,
                  device_info: Dict[str, str],
                  interrupt_callback: types.InterruptCallback = None,
-                 loop: asyncio.AbstractEventLoop = None
+                 loop: asyncio.AbstractEventLoop = None,
+                 polling_interval: int = POLLING_FREQUENCY_SEC
                  ) -> None:
         """
         Constructor
@@ -77,6 +82,7 @@ class Thermocycler(mod_abc.AbstractModule):
             device_info: The thermocycler device info.
             interrupt_callback: Optional interrupt callback.
             loop: Optional loop.
+            polling_interval: How often to poll thermocycler for status
         """
         super().__init__(port=port,
                          usb_port=usb_port,
@@ -86,7 +92,7 @@ class Thermocycler(mod_abc.AbstractModule):
         self._device_info = device_info
         self._listener = ThermocyclerListener(interrupt_callback=interrupt_callback)
         self._poller = Poller(
-            interval_seconds=POLLING_FREQUENCY_SEC, listener=self._listener,
+            interval_seconds=polling_interval, listener=self._listener,
             reader=PollerReader(driver=self._driver)
         )
         self._interrupt_cb = interrupt_callback
@@ -239,11 +245,8 @@ class Thermocycler(mod_abc.AbstractModule):
 
         Subject to change without a version bump.
         """
-        if self.is_simulated:
-            return
-
         while self._listener.plate_status != TemperatureStatus.HOLDING:
-            await self._listener.wait_next_poll()
+            await self.wait_next_poll()
 
     async def wait_for_hold(self, hold_time=0):
         """
@@ -262,7 +265,11 @@ class Thermocycler(mod_abc.AbstractModule):
             await asyncio.sleep(hold_time)
         else:
             while self.hold_time != 0:
-                await self._listener.wait_next_poll()
+                await self.wait_next_poll()
+
+    async def wait_next_poll(self) -> None:
+        """Wait for the next poll to complete."""
+        await self._listener.wait_next_poll()
 
     @property
     def lid_target(self) -> Optional[float]:
@@ -281,8 +288,9 @@ class Thermocycler(mod_abc.AbstractModule):
         return self._listener.lid_status
 
     @property
-    def ramp_rate(self):
-        return self._driver.ramp_rate
+    def ramp_rate(self) -> Optional[float]:
+        """Not supported."""
+        return None
 
     @property
     def hold_time(self) -> Optional[float]:

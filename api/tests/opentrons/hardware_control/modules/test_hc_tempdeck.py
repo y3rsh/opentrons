@@ -31,7 +31,7 @@ async def test_sim_state(loop, usb_port):
                                interrupt_callback=lambda x: None,
                                loop=loop,
                                execution_manager=ExecutionManager(loop=loop))
-    await temp._poller.wait_next_poll()
+    await temp.wait_next_poll()
     assert temp.temperature == 0
     assert temp.target is None
     assert temp.status == 'idle'
@@ -58,7 +58,7 @@ async def test_sim_update(loop, usb_port):
     assert temp.target == 10
     assert temp.status == 'holding at target'
     await temp.deactivate()
-    await temp._poller.wait_next_poll()
+    await temp.wait_next_poll()
     assert temp.temperature == 0
     assert temp.target is None
     assert temp.status == 'idle'

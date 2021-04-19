@@ -15,6 +15,7 @@ from opentrons.hardware_control.modules import update, mod_abc, types
 log = logging.getLogger(__name__)
 
 TEMP_POLL_INTERVAL_SECS = 1
+SIM_TEMP_POLL_INTERVAL_SECS = 0.001
 
 
 class TempDeck(mod_abc.AbstractModule):
@@ -36,15 +37,18 @@ class TempDeck(mod_abc.AbstractModule):
         driver: AbstractTempDeckDriver
         if not simulating:
             driver = await TempDeckDriver.create(port=port)
+            polling_frequency = SIM_TEMP_POLL_INTERVAL_SECS
         else:
             driver = SimulatingDriver(sim_model=sim_model)
+            polling_frequency = TEMP_POLL_INTERVAL_SECS
 
         mod = cls(port=port,
                   usb_port=usb_port,
                   execution_manager=execution_manager,
                   driver=driver,
                   device_info=await driver.get_device_info(),
-                  loop=loop)
+                  loop=loop,
+                  polling_frequency=polling_frequency)
         return mod
 
     def __init__(self,
@@ -54,6 +58,7 @@ class TempDeck(mod_abc.AbstractModule):
                  driver: AbstractTempDeckDriver,
                  device_info: Mapping[str, str],
                  loop: asyncio.AbstractEventLoop = None,
+                 polling_frequency: int = TEMP_POLL_INTERVAL_SECS
                  ) -> None:
         """Constructor"""
         super().__init__(port=port,
@@ -65,7 +70,7 @@ class TempDeck(mod_abc.AbstractModule):
         self._listener = TempdeckListener()
         self._poller = Poller(
             reader=PollerReader(driver=self._driver),
-            interval_seconds=TEMP_POLL_INTERVAL_SECS,
+            interval_seconds=polling_frequency,
             listener=self._listener
         )
 
@@ -83,6 +88,10 @@ class TempDeck(mod_abc.AbstractModule):
     def bootloader(cls) -> mod_abc.UploadFunction:
         return update.upload_via_avrdude
 
+    async def wait_next_poll(self) -> None:
+        """Wait for the next poll to complete."""
+        await self._listener.wait_next_poll()
+
     async def set_temperature(self, celsius: float) -> None:
         """
         Set temperature in degree Celsius
@@ -95,7 +104,7 @@ class TempDeck(mod_abc.AbstractModule):
         await self._driver.set_temperature(celsius=celsius)
         # Wait until we reach the target temperature.
         while self.status != TemperatureStatus.HOLDING:
-            await self._listener.wait_next_poll()
+            await self.wait_next_poll()
 
     async def start_set_temperature(self, celsius) -> None:
         """
@@ -126,7 +135,7 @@ class TempDeck(mod_abc.AbstractModule):
                 self.status == TemperatureStatus.COOLING and
                 self.temperature > awaiting_temperature
         ):
-            await self._listener.wait_next_poll()
+            await self.wait_next_poll()
 
     async def deactivate(self):
         """ Stop heating/cooling and turn off the fan """
