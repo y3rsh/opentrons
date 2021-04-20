@@ -10,7 +10,7 @@ from opentrons.drivers.smoothie_drivers import driver_3_0
 
 
 @pytest.fixture
-def smoothie(emulation_app) -> driver_3_0.SmoothieDriver_3_0_0:
+def subject(emulation_app) -> driver_3_0.SmoothieDriver_3_0_0:
     """Smoothie driver connected to emulator."""
     d = driver_3_0.SmoothieDriver_3_0_0(config=build_config({}), handle_locks=False)
     d.connect(f"socket://127.0.0.1:{SMOOTHIE_PORT}")
@@ -27,18 +27,18 @@ def spy() -> MagicMock:
 
 
 def test_dwell_and_activate_axes(
-        smoothie: driver_3_0.SmoothieDriver_3_0_0, spy: MagicMock
+        subject: driver_3_0.SmoothieDriver_3_0_0, spy: MagicMock
 ):
-    smoothie.activate_axes('X')
-    smoothie._set_saved_current()
-    smoothie.dwell_axes('X')
-    smoothie._set_saved_current()
-    smoothie.activate_axes('XYBC')
-    smoothie._set_saved_current()
-    smoothie.dwell_axes('XC')
-    smoothie._set_saved_current()
-    smoothie.dwell_axes('BCY')
-    smoothie._set_saved_current()
+    subject.activate_axes('X')
+    subject._set_saved_current()
+    subject.dwell_axes('X')
+    subject._set_saved_current()
+    subject.activate_axes('XYBC')
+    subject._set_saved_current()
+    subject.dwell_axes('XC')
+    subject._set_saved_current()
+    subject.dwell_axes('BCY')
+    subject._set_saved_current()
     expected = [
         ['M907 A0.1 B0.05 C0.05 X1.25 Y0.3 Z0.1 G4 P0.005'],
         ['M400'],
@@ -57,11 +57,11 @@ def test_dwell_and_activate_axes(
 
 
 def test_disable_motor(
-        smoothie: driver_3_0.SmoothieDriver_3_0_0, spy: MagicMock
+        subject: driver_3_0.SmoothieDriver_3_0_0, spy: MagicMock
 ):
-    smoothie.disengage_axis('X')
-    smoothie.disengage_axis('XYZ')
-    smoothie.disengage_axis('ABCD')
+    subject.disengage_axis('X')
+    subject.disengage_axis('XYZ')
+    subject.disengage_axis('ABCD')
     expected = [
         ['M18 X'],
         ['M400'],
@@ -74,8 +74,8 @@ def test_disable_motor(
     fuzzy_assert(result=command_log, expected=expected)
 
 
-def test_plunger_commands(smoothie: driver_3_0.SmoothieDriver_3_0_0, spy: MagicMock):
-    smoothie.home()
+def test_plunger_commands(subject: driver_3_0.SmoothieDriver_3_0_0, spy: MagicMock):
+    subject.home()
     expected = [
         ['M907 A0.8 B0.05 C0.05 X0.3 Y0.3 Z0.8 G4 P0.005 G28.2.+[ABCZ].+'],
         ['M400'],
@@ -117,7 +117,7 @@ def test_plunger_commands(smoothie: driver_3_0.SmoothieDriver_3_0_0, spy: MagicM
 
     spy.reset_mock()
 
-    smoothie.move({'X': 0, 'Y': 1.123456, 'Z': 2, 'A': 3})
+    subject.move({'X': 0, 'Y': 1.123456, 'Z': 2, 'A': 3})
     expected = [
         ['M907 A0.8 B0.05 C0.05 X1.25 Y1.25 Z0.8 G4 P0.005 G0.+'],
         ['M400'],
@@ -127,7 +127,7 @@ def test_plunger_commands(smoothie: driver_3_0.SmoothieDriver_3_0_0, spy: MagicM
 
     spy.reset_mock()
 
-    smoothie.move({'B': 2})
+    subject.move({'B': 2})
     expected = [
         ['M907 A0.1 B0.05 C0.05 X0.3 Y0.3 Z0.1 G4 P0.005 G0 B2'],
         ['M400'],
@@ -139,7 +139,7 @@ def test_plunger_commands(smoothie: driver_3_0.SmoothieDriver_3_0_0, spy: MagicM
 
     spy.reset_mock()
 
-    smoothie.move({
+    subject.move({
         'X': 10.987654321,
         'Y': 2.12345678,
         'Z': 2.5,
@@ -158,12 +158,12 @@ def test_plunger_commands(smoothie: driver_3_0.SmoothieDriver_3_0_0, spy: MagicM
     fuzzy_assert(result=command_log, expected=expected)
 
 
-def test_move_with_split(smoothie: driver_3_0.SmoothieDriver_3_0_0, spy: MagicMock):
-    smoothie._setup()
-    smoothie.home()
+def test_move_with_split(subject: driver_3_0.SmoothieDriver_3_0_0, spy: MagicMock):
+    subject._setup()
+    subject.home()
     spy.reset_mock()
 
-    smoothie.configure_splits_for(
+    subject.configure_splits_for(
         {
             "B": MoveSplit(
                 split_distance=1,
@@ -179,9 +179,9 @@ def test_move_with_split(smoothie: driver_3_0.SmoothieDriver_3_0_0, spy: MagicMo
                 fullstep=True)
         }
     )
-    smoothie._steps_per_mm = {"B": 1.0, "C": 1.0}
+    subject._steps_per_mm = {"B": 1.0, "C": 1.0}
 
-    smoothie.move({'X': 0, 'Y': 1.123456, 'Z': 2, 'C': 3})
+    subject.move({'X': 0, 'Y': 1.123456, 'Z': 2, 'C': 3})
     expected = [
         ['M55 M92 C0.03125 G4 P0.01 G0 F60 M907 A0.1 B0.05 C1.75 X1.25 Y1.25 '
          'Z0.8 G4 P0.005'],
@@ -200,7 +200,7 @@ def test_move_with_split(smoothie: driver_3_0.SmoothieDriver_3_0_0, spy: MagicMo
 
     spy.reset_mock()
 
-    smoothie.move({'B': 2})
+    subject.move({'B': 2})
     expected = [
         ['M53 M92 B0.03125 G4 P0.01 G0 F60 M907 A0.1 B1.75 C0.05 '
          'X0.3 Y0.3 Z0.1 G4 P0.005'],
@@ -218,21 +218,21 @@ def test_move_with_split(smoothie: driver_3_0.SmoothieDriver_3_0_0, spy: MagicMo
     fuzzy_assert(result=command_log, expected=expected)
 
 
-def test_set_active_current(smoothie: driver_3_0.SmoothieDriver_3_0_0, spy: MagicMock):
-    smoothie._setup()
-    smoothie.home()
+def test_set_active_current(subject: driver_3_0.SmoothieDriver_3_0_0, spy: MagicMock):
+    subject._setup()
+    subject.home()
 
     spy.reset_mock()
 
-    smoothie.set_active_current(
+    subject.set_active_current(
         {'X': 2, 'Y': 2, 'Z': 2, 'A': 2, 'B': 2, 'C': 2})
-    smoothie.set_dwelling_current(
+    subject.set_dwelling_current(
         {'X': 0, 'Y': 0, 'Z': 0, 'A': 0, 'B': 0, 'C': 0})
 
-    smoothie.move({'X': 0, 'Y': 0, 'Z': 0, 'A': 0, 'B': 0, 'C': 0})
-    smoothie.move({'B': 1, 'C': 1})
-    smoothie.set_active_current({'B': 0.42, 'C': 0.42})
-    smoothie.home('BC')
+    subject.move({'X': 0, 'Y': 0, 'Z': 0, 'A': 0, 'B': 0, 'C': 0})
+    subject.move({'B': 1, 'C': 1})
+    subject.set_active_current({'B': 0.42, 'C': 0.42})
+    subject.home('BC')
     expected = [
         # move all
         ['M907 A2 B2 C2 X2 Y2 Z2 G4 P0.005 G0 A0 B0 C0 X0 Y0 Z0'],
@@ -255,31 +255,27 @@ def test_set_active_current(smoothie: driver_3_0.SmoothieDriver_3_0_0, spy: Magi
     fuzzy_assert(result=command_log, expected=expected)
 
 
-def test_steps_per_mm(smoothie: driver_3_0.SmoothieDriver_3_0_0, spy: MagicMock):
+def test_steps_per_mm(subject: driver_3_0.SmoothieDriver_3_0_0, spy: MagicMock):
     expected = {
         **DEFAULT_GANTRY_STEPS_PER_MM,
         'B': DEFAULT_PIPETTE_CONFIGS['stepsPerMM'],
         'C': DEFAULT_PIPETTE_CONFIGS['stepsPerMM'],
     }
-    assert smoothie.steps_per_mm == expected
-    smoothie.update_steps_per_mm({'Z': 450})
+    assert subject.steps_per_mm == expected
+    subject.update_steps_per_mm({'Z': 450})
     expected['Z'] = 450
-    assert smoothie.steps_per_mm == expected
+    assert subject.steps_per_mm == expected
 
     command_log = [x[0][0].strip() for x in spy.call_args_list]
     assert command_log == ['M92 Z450', 'M400']
 
 
-def test_pipette_configs(smoothie: driver_3_0.SmoothieDriver_3_0_0, spy: MagicMock):
-    res = smoothie.update_pipette_config(
+def test_pipette_configs(subject: driver_3_0.SmoothieDriver_3_0_0, spy: MagicMock):
+    res = subject.update_pipette_config(
         'Z',
         {'home': 175, 'debounce': 12, 'max_travel': 13, 'retract': 14}
     )
-    expected_return = {
-        'Z': {
-            'home': 175, 'debounce': 12, 'max_travel': 13, 'retract': 14
-        }
-    }
+    expected_return = {'Z': {'home': 175, 'debounce': 12, 'max_travel': 13, 'retract': 14}}
     assert res == expected_return
 
     command_log = [x[0][0].strip() for x in spy.call_args_list]
@@ -295,14 +291,14 @@ def test_pipette_configs(smoothie: driver_3_0.SmoothieDriver_3_0_0, spy: MagicMo
     ]
 
 
-def test_set_acceleration(smoothie: driver_3_0.SmoothieDriver_3_0_0, spy: MagicMock):
-    smoothie.set_acceleration(
+def test_set_acceleration(subject: driver_3_0.SmoothieDriver_3_0_0, spy: MagicMock):
+    subject.set_acceleration(
         {'X': 1, 'Y': 2, 'Z': 3, 'A': 4, 'B': 5, 'C': 6})
-    smoothie.push_acceleration()
-    smoothie.pop_acceleration()
-    smoothie.set_acceleration(
+    subject.push_acceleration()
+    subject.pop_acceleration()
+    subject.set_acceleration(
         {'X': 10, 'Y': 20, 'Z': 30, 'A': 40, 'B': 50, 'C': 60})
-    smoothie.pop_acceleration()
+    subject.pop_acceleration()
 
     expected = [
         ['M204 S10000 A4 B5 C6 X1 Y2 Z3'],
@@ -318,25 +314,23 @@ def test_set_acceleration(smoothie: driver_3_0.SmoothieDriver_3_0_0, spy: MagicM
     fuzzy_assert(result=command_log, expected=expected)
 
 
-def test_read_and_write_pipettes(
-        smoothie: driver_3_0.SmoothieDriver_3_0_0, spy: MagicMock
-):
+def test_read_and_write_pipettes(subject: driver_3_0.SmoothieDriver_3_0_0, spy: MagicMock):
     test_id = 'TestsRock!!'
     test_model = 'TestPipette'
-    smoothie.write_pipette_id('left', test_id)
-    read_id = smoothie.read_pipette_id('left')
+    subject.write_pipette_id('left', test_id)
+    read_id = subject.read_pipette_id('left')
     assert read_id == test_id
 
-    smoothie.write_pipette_model('left', test_model)
-    read_model = smoothie.read_pipette_model('left')
+    subject.write_pipette_model('left', test_model)
+    read_model = subject.read_pipette_model('left')
     assert read_model == test_model + '_v1'
 
 
-def test_fast_home(smoothie: driver_3_0.SmoothieDriver_3_0_0, spy: MagicMock):
-    smoothie.home()
+def test_fast_home(subject: driver_3_0.SmoothieDriver_3_0_0, spy: MagicMock):
+    subject.home()
     spy.reset_mock()
 
-    smoothie.fast_home(axis='X', safety_margin=12)
+    subject.fast_home(axis='X', safety_margin=12)
 
     command_log = [x[0][0].strip() for x in spy.call_args_list]
     assert command_log == [
@@ -359,8 +353,8 @@ def test_fast_home(smoothie: driver_3_0.SmoothieDriver_3_0_0, spy: MagicMock):
     ]
 
 
-def test_update_homing_flags(smoothie: driver_3_0.SmoothieDriver_3_0_0, spy: MagicMock):
-    smoothie.update_homed_flags()
+def test_update_homing_flags(subject: driver_3_0.SmoothieDriver_3_0_0, spy: MagicMock):
+    subject.update_homed_flags()
     command_log = [x[0][0].strip() for x in spy.call_args_list]
     assert command_log == [
         'G28.6',
@@ -390,11 +384,9 @@ def test_update_pipette_config(
     ]
 
 
-def test_do_relative_splits_during_home_for(
-        smoothie: driver_3_0.SmoothieDriver_3_0_0, spy: MagicMock
-):
+def test_do_relative_splits_during_home_for(subject: driver_3_0.SmoothieDriver_3_0_0, spy: MagicMock):
     """Test command structure when a split configuration is present."""
-    smoothie.configure_splits_for(
+    subject.configure_splits_for(
         {
             "B": MoveSplit(
                 split_distance=1,
@@ -404,9 +396,9 @@ def test_do_relative_splits_during_home_for(
                 fullstep=True)
         }
     )
-    smoothie._steps_per_mm = {"B": 1.0, "C": 1.0}
+    subject._steps_per_mm = {"B": 1.0, "C": 1.0}
 
-    smoothie._do_relative_splits_during_home_for("BC")
+    subject._do_relative_splits_during_home_for("BC")
 
     command_log = [x[0][0].strip() for x in spy.call_args_list]
     assert command_log == [

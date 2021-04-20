@@ -15,7 +15,7 @@ from opentrons.hardware_control.poller import Reader, WaitableListener, Poller
 from ..execution_manager import ExecutionManager
 from . import types, update, mod_abc
 from opentrons.drivers.thermocycler.driver import (
-    HOLD_TIME_FUZZY_SECONDS
+    ThermocyclerError
 )
 from opentrons.drivers.asyncio.thermocycler import (
     AbstractThermocyclerDriver, SimulatingDriver, ThermocyclerDriver
@@ -26,6 +26,10 @@ MODULE_LOG = logging.getLogger(__name__)
 
 POLLING_FREQUENCY_SEC = 1.0
 SIM_POLLING_FREQUENCY_SEC = 0.001
+
+HOLD_TIME_FUZZY_SECONDS = POLLING_FREQUENCY_SEC * 5
+
+TEMP_UPDATE_RETRIES = 50
 
 
 class Thermocycler(mod_abc.AbstractModule):
@@ -149,6 +153,23 @@ class Thermocycler(mod_abc.AbstractModule):
         await self._driver.close_lid()
         return ThermocyclerLidStatus.CLOSED
 
+    def hold_time_probably_set(self, new_hold_time: Optional[float]) -> bool:
+        """
+        Since we can only get hold time *remaining* from TC, by the time we
+        read hold_time after a set_temperature, the hold_time in TC could have
+        started counting down. So instead of checking for equality, we will
+        have to check if the hold_time returned from TC is within a few seconds
+        of the new hold time. The number of seconds is determined by status
+        polling frequency.
+        """
+        if new_hold_time is None:
+            return True
+        hold_time = self.hold_time
+        if hold_time is None:
+            return False
+        lower_bound = max(0.0, new_hold_time - HOLD_TIME_FUZZY_SECONDS)
+        return lower_bound <= hold_time <= new_hold_time
+
     async def set_temperature(
             self,
             temperature: float,
@@ -162,7 +183,7 @@ class Thermocycler(mod_abc.AbstractModule):
         If hold time is set this function will return after
         the hold time expires.
 
-        Otherwise it will return when the terget temperature is reached.
+        Otherwise it will return when the target temperature is reached.
 
         Args:
             temperature: The target temperature.
@@ -184,6 +205,18 @@ class Thermocycler(mod_abc.AbstractModule):
             temp=temperature,
             hold_time=hold_time,
             volume=volume)
+
+        retries = 0
+        while self.target != temperature or not self.hold_time_probably_set(hold_time):
+            # Wait for the poller to update
+            await self.wait_next_poll()
+            retries += 1
+            if retries > TEMP_UPDATE_RETRIES:
+                raise ThermocyclerError(f'Thermocycler driver set the block '
+                                        f'temp to T={temperature} & H={hold_time} '
+                                        f'but status reads '
+                                        f'T={self.target} & '
+                                        f'H={self.hold_time}')
 
         if hold_time:
             task = self._loop.create_task(
@@ -248,7 +281,7 @@ class Thermocycler(mod_abc.AbstractModule):
         while self._listener.plate_status != TemperatureStatus.HOLDING:
             await self.wait_next_poll()
 
-    async def wait_for_hold(self, hold_time=0):
+    async def wait_for_hold(self, hold_time: float = 0) -> None:
         """
         This method returns only when hold time has elapsed
         """

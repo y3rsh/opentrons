@@ -65,7 +65,8 @@ class SerialConnection:
         self._ack = ack.encode()
 
     async def send_command(
-            self, data: str, retries: int = 0) -> str:
+            self, data: str, retries: int = 0
+    ) -> str:
         """
         Send a command and return the response.
 
@@ -85,6 +86,7 @@ class SerialConnection:
         log.debug(f'{self.name}: Read <- {response!r}')
 
         if self._ack in response:
+            response = response.replace(self._ack, b'')
             str_response = response.decode()
             self.raise_on_error(response=str_response)
             return str_response
@@ -99,9 +101,17 @@ class SerialConnection:
 
         return await self.send_command(data=data, retries=retries)
 
-    @property
-    def serial(self) -> AsyncSerial:
-        return self._serial
+    async def open(self) -> None:
+        """Open the connection."""
+        await self._serial.open()
+
+    async def close(self) -> None:
+        """Close the connection."""
+        await self._serial.close()
+
+    async def is_open(self) -> bool:
+        """Check if connection is open."""
+        return await self._serial.is_open()
 
     @property
     def port(self) -> str:

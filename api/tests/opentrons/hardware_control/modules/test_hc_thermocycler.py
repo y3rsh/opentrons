@@ -87,7 +87,7 @@ async def test_sim_update(loop, usb_port):
                                 hold_time_seconds=None,
                                 hold_time_minutes=None,
                                 volume=50)
-    # await therm.wait_next_poll()
+    await therm.wait_next_poll()
     assert therm.temperature == 10
     assert therm.target == 10
     assert therm.status == 'holding at target'
