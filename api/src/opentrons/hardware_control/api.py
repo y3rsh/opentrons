@@ -28,7 +28,7 @@ from .types import (Axis, HardwareAPILike, CriticalPoint,
                     MustHomeError, NoTipAttachedError, DoorState,
                     DoorStateNotification, PipettePair, TipAttachedError,
                     HardwareAction, PairedPipetteConfigValueError,
-                    MotionChecks)
+                    MotionChecks, PauseType, PauseEvent)
 from . import modules, robot_calibration as rb_cal
 
 if TYPE_CHECKING:
@@ -43,6 +43,24 @@ mod_log = logging.getLogger(__name__)
 
 InstrumentsByMount = Dict[top_types.Mount, Optional[Pipette]]
 PipetteHandlingData = Tuple[Pipette, top_types.Mount]
+
+
+class PauseManager:
+    def __init__(self):
+        self.queue = {}
+        self.is_paused = False
+
+    def resume(self, name):
+        if name in self.queue.keys():
+            self.queue.pop(name)
+        if not self.queue and self.is_paused:
+            self.is_paused = False            
+
+    def pause(self, task):
+        if task.name not in self.queue.keys():
+            self.queue[task.name] = task
+        if not self.is_paused:
+            self.is_paused = True
 
 
 class API(HardwareAPILike):
@@ -92,6 +110,7 @@ class API(HardwareAPILike):
         self._motion_lock = asyncio.Lock(loop=self._loop)
         self._door_state = DoorState.CLOSED
         self._robot_calibration = rb_cal.load()
+        self._pause_manager = PauseManager()
 
     @property
     def robot_calibration(self) -> rb_cal.RobotCalibration:
@@ -332,13 +351,13 @@ class API(HardwareAPILike):
         """ Delay execution by pausing and sleeping.
         """
         await self._wait_for_is_running()
-        self.pause()
+        # self.pause()
         if not self.is_simulator:
             async def sleep_for_seconds(seconds: float):
                 await asyncio.sleep(seconds)
             delay_task = self._loop.create_task(sleep_for_seconds(duration_s))
             await self._execution_manager.register_cancellable_task(delay_task)
-        self.resume()
+        # self.resume()
 
     def reset_instrument(self, mount: top_types.Mount = None):
         """
@@ -522,7 +541,7 @@ class API(HardwareAPILike):
                                                    explicit_modeset)
 
     # Global actions API
-    def pause(self):
+    def pause(self, pause_event: PauseEvent):
         """
         Pause motion of the robot after a current motion concludes.
 
@@ -534,6 +553,7 @@ class API(HardwareAPILike):
         is paused will not proceed until the system is resumed with
         :py:meth:`resume`.
         """
+        self._pause_manager.pause(pause_event)
 
         async def _chained_calls():
             await self._execution_manager.pause()
@@ -547,10 +567,15 @@ class API(HardwareAPILike):
             cb(message)
         self.pause()
 
-    def resume(self):
+    def resume(self, pause_type: PauseType):
         """
         Resume motion after a call to :py:meth:`pause`.
         """
+        self._pause_manager.resume(pause_type)
+
+        if not self._pause_manager.is_paused:
+            return
+
         # Resume must be called immediately to awaken thread running hardware
         #  methods (ThreadManager)
         self._backend.resume()

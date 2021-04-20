@@ -235,6 +235,32 @@ class HardwareAction(enum.Enum):
         return self.name
 
 
+class PauseType(enum.Enum):
+    DOOR = 0
+    APP = 1
+    PROTOCOL = 2
+
+    @classmethod
+    def all(cls):
+        return (cls.DOOR, cls.APP, cls.PROTOCOL)
+
+    @property
+    def priority(self):
+        return self.value
+
+
+@dataclass
+class PauseEvent:
+    name: PauseType
+    priority: int
+    message: str
+
+    def __init__(self, pause_type: PauseType, msg: str):
+        self.name = pause_type.name
+        self.priority = pause_type.priority
+        self.message = msg
+
+
 class ExecutionCancelledError(RuntimeError):
     pass
 

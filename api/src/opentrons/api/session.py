@@ -37,7 +37,7 @@ from opentrons.hardware_control import (API, ThreadManager,
                                         ExecutionCancelledError,
                                         ThreadedAsyncLock)
 from opentrons.hardware_control.types import (DoorState, HardwareEventType,
-                                              HardwareEvent)
+                                              HardwareEvent, PauseEvent, PauseType)
 from .models import Container, Instrument, Module
 from .dev_types import State, StateInfo, Message, LastCommand, Error, CommandShortId
 
@@ -262,6 +262,7 @@ class Session(RobotBusy):
         self.metadata = getattr(self._protocol, 'metadata', {})
 
         self._hardware = hardware
+        self._execution_manager = self._hardware._execution_manager
         self._simulating_ctx = ProtocolContext.build_using(
             implementation=ProtocolContextImplementation.build_using(
                 self._protocol),
@@ -467,13 +468,14 @@ class Session(RobotBusy):
         self.set_state('stopped')
 
     def pause(self,
+              pause_event: PauseEvent,
               reason: str = None,
               user_message: str = None,
               duration: float = None) -> None:
-        self._hardware.pause()
+        self._hardware.pause(pause_event)
         self.set_state(
             'paused', reason=reason,
-            user_message=user_message, duration=duration)
+            user_message=pause_event.message, duration=duration)
 
     def resume(self) -> None:
         if not self.blocked:
@@ -502,7 +504,7 @@ class Session(RobotBusy):
             if ff.enable_door_safety_switch() and \
                     hw_event.new_state == DoorState.OPEN and \
                     self.state == 'running':
-                self.pause('Robot door is open')
+                self.pause(PauseEvent(pause_type=PauseType.DOOR, msg='Robot door is open'))
             else:
                 self._on_state_changed()
 
