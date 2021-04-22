@@ -38,10 +38,14 @@ export function ProtocolModuleList(): React.Node {
   const modulesRequired = useSelector((state: State) =>
     robotSelectors.getModules(state)
   )
+  const loadOrder = useSelector((state: State) =>
+    robotSelectors.getModulesByProtocolLoadOrder(state)
+)
   const matched = useSelector((state: State) => getMatchedModules(state))
   const missingModules = useSelector((state: State) => getMissingModules(state))
   console.log('matched: ', matched)
   console.log('modulesRequired: ' , modulesRequired)
+  console.log('loadOrder: ', loadOrder)
   if (modulesRequired.length < 1) return null
   return (
     <TitledList key={t('modules_title')} title={t('modules_title')}>
