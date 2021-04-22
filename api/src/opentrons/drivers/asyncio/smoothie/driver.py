@@ -12,6 +12,7 @@ from math import isclose
 from opentrons.drivers.asyncio.smoothie.errors import ParseError, SmoothieError, \
     SmoothieAlarm, TipProbeError
 from opentrons.drivers.command_builder import CommandBuilder
+from opentrons.drivers.serial_communication import get_ports_by_name
 from serial.serialutil import SerialException  # type: ignore
 
 from opentrons.config.types import RobotConfig
@@ -552,16 +553,19 @@ class SmoothieDriver:
         self._connection = None
         self.simulating = True
 
-    def is_connected(self) -> bool:
+    async def is_connected(self) -> bool:
         if not self._connection:
             return False
-        return self._connection.serial.is_open()
+        return await self._connection.serial.is_open()
 
-    def _connect_to_port(self, port: str = None):
+    async def _connect_to_port(self, port: str = None):
         try:
             # TODO deal with get port by name
-            #  smoothie_id = environ.get('OT_SMOOTHIE_ID', 'AMA')
-            self._connection = SerialConnection.create(
+            if not port:
+                smoothie_id = environ.get('OT_SMOOTHIE_ID', 'AMA')
+                port = get_ports_by_name(smoothie_id)[0]
+
+            self._connection = await SerialConnection.create(
                 port=port,
                 baud_rate=self._config.serial_speed,
                 name='smoothie',
@@ -936,7 +940,7 @@ class SmoothieDriver:
 
     # ----------- Private functions --------------- #
 
-    def _wait_for_ack(self):
+    async def _wait_for_ack(self):
         """
         In the case where smoothieware has just been reset, we want to
         ignore all the garbage it spits out
@@ -944,21 +948,21 @@ class SmoothieDriver:
         This methods writes a sequence of newline characters, which will
         guarantee Smoothieware responds with 'ok\r\nok\r\n' within 3 seconds
         """
-        self._send_command(_command_builder(), timeout=SMOOTHIE_BOOT_TIMEOUT)
+        await self._send_command(_command_builder(), timeout=SMOOTHIE_BOOT_TIMEOUT)
 
-    def _reset_from_error(self):
+    async def _reset_from_error(self):
         # smoothieware will ignore new messages for a short time
         # after it has entered an error state, so sleep for some milliseconds
         if not self.simulating:
             sleep(DEFAULT_STABILIZE_DELAY)
         log.debug("reset_from_error")
-        self._send_command(
+        await self._send_command(
             _command_builder().add_gcode(gcode=GCODE.RESET_FROM_ERROR)
         )
         self.update_homed_flags()
 
     # Potential place for command optimization (buffering, flushing, etc)
-    def _send_command(
+    async def _send_command(
             self,
             command: CommandBuilder,
             timeout: float = DEFAULT_EXECUTE_TIMEOUT,
@@ -1004,15 +1008,15 @@ class SmoothieDriver:
             return
         try:
             with self._serial_lock:
-                return self._send_command_unsynchronized(command,
-                                                         ack_timeout,
-                                                         timeout)
+                return await self._send_command_unsynchronized(
+                    command, ack_timeout, timeout
+                )
         except SmoothieError as se:
             # XXX: This is a reentrancy error because another command could
             # swoop in here. We're already resetting though and errors (should
             # be) rare so it's probably fine, but the actual solution to this
             # is locking at a higher level like in APIv2.
-            self._reset_from_error()
+            await self._reset_from_error()
             error_axis = se.ret_code.strip()[-1]
             if not suppress_error_msg:
                 log.warning(
@@ -1025,14 +1029,13 @@ class SmoothieDriver:
                 self.home(error_axis)
             raise SmoothieError(se.ret_code, str(command))
 
-    def _send_command_unsynchronized(self,
-                                     command: CommandBuilder,
-                                     ack_timeout: float,
-                                     execute_timeout: float):
+    async def _send_command_unsynchronized(
+            self, command: CommandBuilder,
+            ack_timeout: float, execute_timeout: float):
         command_str = command.build()
-        cmd_ret = self._write_with_retries(
-            command_str,
-            ack_timeout, DEFAULT_COMMAND_RETRIES)
+        cmd_ret = await self._connection.send_command(
+            data=command_str, retries=DEFAULT_COMMAND_RETRIES
+        )
         cmd_ret = self._remove_unwanted_characters(command_str, cmd_ret)
         self._handle_return(cmd_ret)
         wait_ret = await self._connection.send_command(
@@ -1113,9 +1116,6 @@ class SmoothieDriver:
             log.debug(f'Newly formatted response: {modified_response}')
 
         return modified_response
-
-    def _write_with_retries(self, cmd: str, timeout: float, retries: int) -> str:
-        return self._connection.send_command(data=cmd, retries=retries)
 
     def _home_x(self):
         log.debug("_home_x")
@@ -1276,7 +1276,7 @@ class SmoothieDriver:
             cmd = self._build_steps_per_mm(data)
             self._send_command(cmd)
 
-    def _read_from_pipette(self, gcode: str, mount: str) -> Optional[str]:
+    async def _read_from_pipette(self, gcode: str, mount: str) -> Optional[str]:
         """
         Read from an attached pipette's internal memory. The gcode used
         determines which portion of memory is read and returned.
@@ -1300,7 +1300,7 @@ class SmoothieDriver:
             self.disengage_axis('ZABC')
             self.delay(PIPETTE_READ_DELAY)
             # request from Smoothieware the information from that pipette
-            res = self._send_command(
+            res = await self._send_command(
                 _command_builder().add_gcode(gcode=gcode).add_element(allowed_mount),
                 suppress_error_msg=True)
             if res:
@@ -1313,7 +1313,7 @@ class SmoothieDriver:
             pass
         return None
 
-    def _write_to_pipette(self, gcode: str, mount: str, data_string: str):
+    async def _write_to_pipette(self, gcode: str, mount: str, data_string: str):
         """
         Write to an attached pipette's internal memory. The gcode used
         determines which portion of memory is written to.
@@ -1352,13 +1352,15 @@ class SmoothieDriver:
             element=byte_string
         )
         log.debug(f"_write_to_pipette: {command}")
-        self._send_command(command)
+        await self._send_command(command)
 
     # ----------- END Private functions ----------- #
 
     # ----------- Public interface ---------------- #
-    def move(self, target: Dict[str, float], home_flagged_axes: bool = False,  # noqa: C901, E501
-             speed: float = None):
+    async def move(
+            self, target: Dict[str, float], home_flagged_axes: bool = False,
+            speed: float = None
+    ) -> None:
         """
         Move to the `target` Smoothieware coordinate, along any of the size
         axes, XYZABC.
@@ -1557,7 +1559,7 @@ class SmoothieDriver:
             # TODO (hmg) a movement's timeout should be calculated by
             # how long the movement is expected to take.
             _do_split()
-            self._send_command(command, timeout=DEFAULT_EXECUTE_TIMEOUT)
+            await self._send_command(command, timeout=DEFAULT_EXECUTE_TIMEOUT)
         finally:
             # dwell pipette motors because they get hot
             plunger_axis_moved = ''.join(set('BC') & set(target.keys()))
@@ -1568,9 +1570,9 @@ class SmoothieDriver:
 
         self._update_position(target)
 
-    def home(self,
-             axis: str = AXES,
-             disabled: str = DISABLE_AXES) -> Dict[str, float]:
+    async def home(
+            self, axis: str = AXES, disabled: str = DISABLE_AXES
+    ) -> Dict[str, float]:
 
         self.run_flag.wait()
 
@@ -1625,7 +1627,7 @@ class SmoothieDriver:
                 try:
                     # home commands are executed before ack, use a long ack
                     # timeout and short execute timeout
-                    self._send_command(
+                    await self._send_command(
                         command, ack_timeout=DEFAULT_EXECUTE_TIMEOUT,
                         timeout=DEFAULT_ACK_TIMEOUT)
                     self.update_homed_flags(flags={ax: True for ax in axes})
@@ -2027,9 +2029,9 @@ class SmoothieDriver:
             else:
                 raise
 
-        if not self.is_connected():
+        if not await self.is_connected():
             log.info("Getting port to connect")
-            self._connect_to_port()
+            await self._connect_to_port()
 
         assert self._connection,\
             'driver must have been initialized with a port'
@@ -2041,7 +2043,7 @@ class SmoothieDriver:
             # set smoothieware into programming mode
             self._smoothie_programming_mode()
             # close the port so other application can access it
-            self._connection.close()
+            await self._connection.serial.close()
 
         # run lpc21isp, THIS WILL TAKE AROUND 1 MINUTE TO COMPLETE
         update_cmd = f'lpc21isp -wipe -donotstart {filename} ' \
@@ -2069,11 +2071,11 @@ class SmoothieDriver:
         else:
             log.info("Smoothie update complete")
         try:
-            self._connection.close()
+            await self._connection.serial.close()
         except Exception:
             log.exception('Failed to close smoothie connection.')
         # re-open the port
-        self._connection.open()
+        await self._connection.serial.open()
         # reset smoothieware
         self._smoothie_reset()
         # run setup gcodes
