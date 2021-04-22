@@ -1,18 +1,18 @@
 import re
 from dataclasses import dataclass
-from typing import Sequence, Dict, Generator
+from typing import Sequence, Dict, Generator, Optional
 
 
 @dataclass
 class Command:
     gcode: str
-    params: Dict[str, float]
+    params: Dict[str, Optional[float]]
 
 
 class Parser:
     """Gcode line parser."""
 
-    PREFIX_NUMBER_RE = re.compile(r"(?P<prefix>[A-Z])(?P<value>-*\d+\.?\d*)")
+    PREFIX_NUMBER_RE = re.compile(r"(?P<prefix>[A-Z])(?P<value>-?\d*\.?\d*)")
 
     def __init__(self, gcodes: Sequence[str]) -> None:
         """
@@ -67,5 +67,5 @@ class Parser:
         pars = (i.groupdict() for i in Parser.PREFIX_NUMBER_RE.finditer(body))
         return Command(
             gcode=gcode,
-            params={p['prefix']: float(p['value']) for p in pars}
+            params={p['prefix']: float(p['value']) if p['value'] else None for p in pars}
         )

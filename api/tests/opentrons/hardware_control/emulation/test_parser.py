@@ -29,8 +29,10 @@ def parser(gcodes: Sequence[str]) -> Parser:
         ]],
         ["M123.2 B132C-1D321.2", [
             Command(gcode="M123.2", params={"B": 132, "C": -1, "D": 321.2})
+        ]],
+        ["M123.2 LX R", [
+            Command(gcode="M123.2", params={"L": None, "X": None, "R": None})
         ]]
-
     ]
 )
 def test_parse_command(parser: Parser, line: str, expected: Sequence[Command]) -> None:
