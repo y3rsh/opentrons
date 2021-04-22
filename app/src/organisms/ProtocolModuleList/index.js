@@ -40,7 +40,8 @@ export function ProtocolModuleList(): React.Node {
   )
   const matched = useSelector((state: State) => getMatchedModules(state))
   const missingModules = useSelector((state: State) => getMissingModules(state))
-
+  console.log('matched: ', matched)
+  console.log('modulesRequired: ' , modulesRequired)
   if (modulesRequired.length < 1) return null
   return (
     <TitledList key={t('modules_title')} title={t('modules_title')}>
