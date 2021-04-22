@@ -1,3 +1,4 @@
+from __future__ import annotations
 import asyncio
 import contextlib
 from os import environ
@@ -247,11 +248,51 @@ def _command_builder() -> CommandBuilder:
 
 
 class SmoothieDriver:
+
+    @classmethod
+    async def build(
+            cls,
+            port: str,
+            config: RobotConfig,
+            gpio_chardev: GPIODriverLike = None,
+    ) -> SmoothieDriver:
+        """
+        Build a smoothie driver
+
+        Args:
+            port: The port
+            config: Robot configuration
+            gpio_chardev: Optional GPIO driver
+
+        Returns:
+            A SmoothieDriver instance.
+        """
+        connection = await SerialConnection.create(
+            port=port,
+            baud_rate=config.serial_speed,
+            name='smoothie',
+            timeout=DEFAULT_EXECUTE_TIMEOUT,
+            ack=SMOOTHIE_ACK
+        )
+        gpio_chardev = gpio_chardev or SimulatingGPIOCharDev('simulated')
+
+        return cls(
+            config=config, connection=connection, gpio_chardev=gpio_chardev
+        )
+
     def __init__(
             self,
             config: RobotConfig,
-            gpio_chardev: GPIODriverLike = None,
-            handle_locks: bool = True):
+            connection: SerialConnection,
+            gpio_chardev: GPIODriverLike):
+        """
+        Constructor
+
+        Args:
+            config: The robot configuration
+            connection: The serial connection.
+            gpio_chardev: GPIO device.
+        """
         self.run_flag = Event()
         self.run_flag.set()
 
@@ -260,11 +301,10 @@ class SmoothieDriver:
         # why do we do this after copying the HOMED_POSITION?
         self._update_position({axis: 0 for axis in AXES})
 
-        self.simulating = True
-        self._connection: Optional[SerialConnection] = None
+        self._connection = connection
         self._config = config
 
-        self._gpio_chardev = gpio_chardev or SimulatingGPIOCharDev('simulated')
+        self._gpio_chardev = gpio_chardev
 
         # Current settings:
         # The amperage of each axis, has been organized into three states:
@@ -337,17 +377,6 @@ class SmoothieDriver:
             'C': False
         })
 
-        class DummyLock:
-            def __enter__(self):
-                pass
-
-            def __exit__(self, *args, **kwargs):
-                pass
-
-        if handle_locks:
-            self._serial_lock: Union[RLock, DummyLock] = RLock()
-        else:
-            self._serial_lock = DummyLock()
         self._is_hard_halting = Event()
         self._move_split_config: MoveSplits = {}
         #: Cache of currently configured splits from callers
@@ -381,26 +410,21 @@ class SmoothieDriver:
         if default is None:
             default = self._position
 
-        if self.simulating:
-            updated_position = self._position.copy()
-            updated_position.update(**default)
-        else:
-            def _recursive_update_position(retries):
-                try:
-                    position_response = self._send_command(
-                        _command_builder().add_gcode(gcode=GCODE.CURRENT_POSITION)
-                    )
-                    return _parse_position_response(position_response)
-                except ParseError as e:
-                    retries -= 1
-                    if retries <= 0:
-                        raise e
-                    if not self.simulating:
-                        sleep(DEFAULT_STABILIZE_DELAY)
-                    return _recursive_update_position(retries)
+        def _recursive_update_position(retries):
+            try:
+                position_response = self._send_command(
+                    _command_builder().add_gcode(gcode=GCODE.CURRENT_POSITION)
+                )
+                return _parse_position_response(position_response)
+            except ParseError as e:
+                retries -= 1
+                if retries <= 0:
+                    raise e
+                sleep(DEFAULT_STABILIZE_DELAY)
+                return _recursive_update_position(retries)
 
-            updated_position = _recursive_update_position(
-                DEFAULT_COMMAND_RETRIES)
+        updated_position = _recursive_update_position(
+            DEFAULT_COMMAND_RETRIES)
 
         self._update_position(updated_position)
 
@@ -419,7 +443,7 @@ class SmoothieDriver:
         log.info(f"Updated move split config with {config}")
         self._axes_moved_at.reset_moved(config.keys())
 
-    def read_pipette_id(self, mount) -> Optional[str]:
+    async def read_pipette_id(self, mount) -> Optional[str]:
         """
         Reads in an attached pipette's ID
         The ID is unique to this pipette, and is a string of unknown length
@@ -428,17 +452,14 @@ class SmoothieDriver:
         :return id string, or None
         """
         res: Optional[str] = None
-        if self.simulating:
-            res = '1234567890'
-        else:
-            try:
-                res = self._read_from_pipette(GCODE.READ_INSTRUMENT_ID, mount)
-            except UnicodeDecodeError:
-                log.exception("Failed to decode pipette ID string:")
-                res = None
+        try:
+            res = await self._read_from_pipette(GCODE.READ_INSTRUMENT_ID, mount)
+        except UnicodeDecodeError:
+            log.exception("Failed to decode pipette ID string:")
+            res = None
         return res
 
-    def read_pipette_model(self, mount) -> Optional[str]:
+    async def read_pipette_model(self, mount) -> Optional[str]:
         """
         Reads an attached pipette's MODEL
         The MODEL is a unique string for this model of pipette
@@ -446,24 +467,20 @@ class SmoothieDriver:
         :param mount: string with value 'left' or 'right'
         :return model string, or None
         """
-        if self.simulating:
-            res = None
-        else:
-            res = self._read_from_pipette(
-                GCODE.READ_INSTRUMENT_MODEL, mount)
-            if res and '_v' not in res:
-                # Backward compatibility for pipettes programmed with model
-                # strings that did not include the _v# designation
-                res = res + '_v1'
-            elif res and '_v13' in res:
-                # Backward compatibility for pipettes programmed with model
-                # strings that did not include the "." to seperate version
-                # major and minor values
-                res = res.replace('_v13', '_v1.3')
-
+        res = await self._read_from_pipette(
+            GCODE.READ_INSTRUMENT_MODEL, mount)
+        if res and '_v' not in res:
+            # Backward compatibility for pipettes programmed with model
+            # strings that did not include the _v# designation
+            res = res + '_v1'
+        elif res and '_v13' in res:
+            # Backward compatibility for pipettes programmed with model
+            # strings that did not include the "." to seperate version
+            # major and minor values
+            res = res.replace('_v13', '_v1.3')
         return res
 
-    def write_pipette_id(self, mount: str, data_string: str):
+    async def write_pipette_id(self, mount: str, data_string: str):
         """
         Writes to an attached pipette's ID memory location
         The ID is unique to this pipette, and is a string of unknown length
@@ -476,10 +493,10 @@ class SmoothieDriver:
             String (str) that is of unknown length, and should be unique to
             this one pipette
         """
-        self._write_to_pipette(
+        await self._write_to_pipette(
             GCODE.WRITE_INSTRUMENT_ID, mount, data_string)
 
-    def write_pipette_model(self, mount: str, data_string: str):
+    async def write_pipette_model(self, mount: str, data_string: str):
         """
         Writes to an attached pipette's MODEL memory location
         The MODEL is a unique string for this model of pipette
@@ -491,11 +508,11 @@ class SmoothieDriver:
         data_string:
             String (str) that is unique to this model of pipette
         """
-        self._write_to_pipette(GCODE.WRITE_INSTRUMENT_MODEL, mount, data_string)
+        await self._write_to_pipette(GCODE.WRITE_INSTRUMENT_MODEL, mount, data_string)
 
-    def update_pipette_config(
-            self, axis: str, data: Dict[str, float])\
-            -> Dict[str, Dict[str, float]]:
+    async def update_pipette_config(
+            self, axis: str, data: Dict[str, float]
+    ) -> Dict[str, Dict[str, float]]:
         """
         Updates the following configs for a given pipette mount based on
         the detected pipette type:
@@ -508,9 +525,6 @@ class SmoothieDriver:
         For instance, calling update_pipette_config('B', {'retract': 2})
         would return (if successful) {'B': {'retract': 2}}
         """
-        if self.simulating:
-            return {axis: data}
-
         gcodes = {
             'retract': GCODE.PIPETTE_RETRACT,
             'debounce': GCODE.PIPETTE_DEBOUNCE,
@@ -529,7 +543,7 @@ class SmoothieDriver:
                 cmd.add_float(prefix='O', value=value, precision=None)
             else:
                 cmd.add_float(prefix=axis, value=value, precision=None)
-            res = self._send_command(cmd)
+            res = await self._send_command(cmd)
             if res is None:
                 raise ValueError(
                     f'{key} was not updated to {value} on {axis} axis')
@@ -541,7 +555,7 @@ class SmoothieDriver:
     # way of simulating vs really running
     def connect(self, port: str = None):
         if environ.get('ENABLE_VIRTUAL_SMOOTHIE', '').lower() == 'true':
-            self.simulating = True
+            # self.simulating = True
             return
         self.disconnect()
         self._connect_to_port(port)
@@ -551,7 +565,7 @@ class SmoothieDriver:
         if self.is_connected():
             self._connection.close()  # type: ignore
         self._connection = None
-        self.simulating = True
+        # self.simulating = True
 
     async def is_connected(self) -> bool:
         if not self._connection:
@@ -572,7 +586,7 @@ class SmoothieDriver:
                 timeout=DEFAULT_EXECUTE_TIMEOUT,
                 ack=SMOOTHIE_ACK
             )
-            self.simulating = False
+            # self.simulating = False
         except SerialException:
             # if another process is using the port, pyserial raises an
             # exception that describes a "readiness to read" which is confusing
@@ -602,12 +616,10 @@ class SmoothieDriver:
           CNC Build   NOMSD Build
         6 axis
         """
-        version = 'Virtual Smoothie'
-        if not self.simulating:
-            version = self._send_command(_command_builder().add_gcode(
-                gcode=GCODE.VERSION))
-            version = version.split(',')[0].split(':')[-1].strip()
-            version = version.replace('NOMSD', '')
+        version = self._send_command(_command_builder().add_gcode(
+            gcode=GCODE.VERSION))
+        version = version.split(',')[0].split(':')[-1].strip()
+        version = version.replace('NOMSD', '')
         return version
 
     @property
@@ -643,9 +655,6 @@ class SmoothieDriver:
         if flags and isinstance(flags, dict):
             self.homed_flags.update(flags)
 
-        elif self.simulating:
-            self.homed_flags.update({ax: False for ax in AXES})
-
         elif self.is_connected():
 
             def _recursive_update_homed_flags(retries: int):
@@ -658,8 +667,7 @@ class SmoothieDriver:
                     retries -= 1
                     if retries <= 0:
                         raise e
-                    if not self.simulating:
-                        sleep(DEFAULT_STABILIZE_DELAY)
+                    sleep(DEFAULT_STABILIZE_DELAY)
                     return _recursive_update_homed_flags(retries)
 
             _recursive_update_homed_flags(DEFAULT_COMMAND_RETRIES)
@@ -953,8 +961,7 @@ class SmoothieDriver:
     async def _reset_from_error(self):
         # smoothieware will ignore new messages for a short time
         # after it has entered an error state, so sleep for some milliseconds
-        if not self.simulating:
-            sleep(DEFAULT_STABILIZE_DELAY)
+        sleep(DEFAULT_STABILIZE_DELAY)
         log.debug("reset_from_error")
         await self._send_command(
             _command_builder().add_gcode(gcode=GCODE.RESET_FROM_ERROR)
@@ -1004,8 +1011,6 @@ class SmoothieDriver:
             complete in the worst case. If this is None, the timeout will
             be infinite. This is almost certainly not what you want.
         """
-        if self.simulating:
-            return
         try:
             with self._serial_lock:
                 return await self._send_command_unsynchronized(
@@ -1261,11 +1266,6 @@ class SmoothieDriver:
 
     def update_steps_per_mm(self, data: Union[Dict[str, float], str]):
         # Using M92, update steps per mm for a given axis
-        if self.simulating:
-            if isinstance(data, dict):
-                self.steps_per_mm.update(data)
-            return
-
         if isinstance(data, str):
             # Unfortunately update server calls driver._setup() before the
             # update can correctly load the robot_config change on disk.
@@ -1835,9 +1835,7 @@ class SmoothieDriver:
         self.set_axis_max_speed({ax: speed for ax in axes})
 
         # only need to request switch state once
-        state_of_switches = {ax: False for ax in AXES}
-        if not self.simulating:
-            state_of_switches = self.switch_state
+        state_of_switches = self.switch_state
 
         # incase axes is pressing endstop, home it slowly instead of moving
         homing_axes = ''.join(ax for ax in axes if state_of_switches[ax])
@@ -1857,12 +1855,10 @@ class SmoothieDriver:
             self.pop_axis_max_speed()
 
     def pause(self):
-        if not self.simulating:
-            self.run_flag.clear()
+        self.run_flag.clear()
 
     def resume(self):
-        if not self.simulating:
-            self.run_flag.set()
+        self.run_flag.set()
 
     def delay(self, seconds: float):
         # per http://smoothieware.org/supported-g-codes:
@@ -1970,44 +1966,35 @@ class SmoothieDriver:
             self.home(axes_string)
 
     def _smoothie_reset(self):
-        log.debug(f'Resetting Smoothie (simulating: {self.simulating})')
-        if self.simulating:
-            pass
-        else:
-            self._gpio_chardev.set_reset_pin(False)
-            self._gpio_chardev.set_isp_pin(True)
-            sleep(0.25)
-            self._gpio_chardev.set_reset_pin(True)
-            sleep(0.25)
-            self._wait_for_ack()
-            self._reset_from_error()
+        log.debug(f'Resetting Smoothie')
+        self._gpio_chardev.set_reset_pin(False)
+        self._gpio_chardev.set_isp_pin(True)
+        sleep(0.25)
+        self._gpio_chardev.set_reset_pin(True)
+        sleep(0.25)
+        self._wait_for_ack()
+        self._reset_from_error()
 
     def _smoothie_programming_mode(self):
-        log.debug(f'Setting Smoothie to ISP mode (simulating: {self.simulating})')
-        if self.simulating:
-            pass
-        else:
-            self._gpio_chardev.set_reset_pin(False)
-            self._gpio_chardev.set_isp_pin(False)
-            sleep(0.25)
-            self._gpio_chardev.set_reset_pin(True)
-            sleep(0.25)
-            self._gpio_chardev.set_isp_pin(True)
-            sleep(0.25)
+        log.debug(f'Setting Smoothie to ISP mode')
+        self._gpio_chardev.set_reset_pin(False)
+        self._gpio_chardev.set_isp_pin(False)
+        sleep(0.25)
+        self._gpio_chardev.set_reset_pin(True)
+        sleep(0.25)
+        self._gpio_chardev.set_isp_pin(True)
+        sleep(0.25)
 
     def hard_halt(self):
-        log.debug(f'Halting Smoothie (simulating: {self.simulating}')
-        if self.simulating:
-            pass
-        else:
-            self._is_hard_halting.set()
-            self._gpio_chardev.set_halt_pin(False)
-            sleep(0.25)
-            self._gpio_chardev.set_halt_pin(True)
-            sleep(0.25)
-            self.run_flag.set()
+        log.debug(f'Halting Smoothie')
+        self._is_hard_halting.set()
+        self._gpio_chardev.set_halt_pin(False)
+        sleep(0.25)
+        self._gpio_chardev.set_halt_pin(True)
+        sleep(0.25)
+        self.run_flag.set()
 
-    async def update_firmware(self,  # noqa: C901
+    async def update_firmware(self,
                               filename: str,
                               loop: asyncio.AbstractEventLoop = None,
                               explicit_modeset: bool = True) -> str:
