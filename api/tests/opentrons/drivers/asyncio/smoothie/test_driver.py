@@ -1,20 +1,24 @@
 from copy import deepcopy
+
+import opentrons.drivers.asyncio.smoothie.constants
+import opentrons.drivers.asyncio.smoothie.parse_utils
 from mock import AsyncMock
 from unittest.mock import Mock
 import pytest
+from opentrons.drivers.asyncio.smoothie.command_sender import \
+    SmoothieCommandSender
 from opentrons.drivers.types import MoveSplit
 
 from tests.opentrons.conftest import fuzzy_assert
 from opentrons.config.robot_configs import (
     DEFAULT_GANTRY_STEPS_PER_MM, DEFAULT_PIPETTE_CONFIGS)
 from opentrons.drivers.asyncio.smoothie import driver
-from opentrons.drivers.asyncio.communication import SerialConnection
 
 
 @pytest.fixture
 def mock_connection() -> AsyncMock:
     """The mock SerialConnection."""
-    return AsyncMock(spec=SerialConnection)
+    return AsyncMock(spec=SmoothieCommandSender)
 
 
 @pytest.fixture
@@ -41,92 +45,52 @@ def position(x, y, z, a, b, c):
 
 
 async def test_update_position(smoothie: driver.SmoothieDriver, mock_connection: AsyncMock) -> None:
+    """It should update the position."""
     driver = smoothie
 
-    mock_connection.send_command.return_value = 'ok MCS: X:0.0000 Y:0.0000 Z:0.0000 A:0.0000 B:0.0000 C:0.0000'
+    mock_connection.send_command.return_value = 'ok MCS: X:1.0000 Y:2.0000 Z:3.0000 A:4.5000 B:0.0000 C:0.0000'
 
-    driver.update_position()
+    await driver.update_position()
     expected = {
-        'X': 0,
-        'Y': 0,
-        'Z': 0,
-        'A': 0,
+        'X': 1,
+        'Y': 2,
+        'Z': 3,
+        'A': 4.5,
         'B': 0,
         'C': 0
     }
-    mock_connection.send_command.assert_called_once_with("")
     assert driver.position == expected
 
-async def test_update_position2(smoothie: driver.SmoothieDriver, mock_connection: AsyncMock) -> None:
 
-    count = 0
+async def test_update_position_retry(
+        smoothie: driver.SmoothieDriver, mock_connection: AsyncMock
+) -> None:
+    """It should retry after a parse error."""
+    msg = 'ok MCS: X:0.0000 Y:MISTAKE Z:0.0000 A:0.0000 B:0.0000 C:0.0000'
 
-    def _new_send_message2(self, command, timeout=None):
-        nonlocal count
+    mock_connection.send_command.side_effect = [
         # first attempt to read, we get bad data
-        msg = 'ok MCS: X:0.0000 Y:MISTAKE Z:0.0000 A:0.0000 B:0.0000 C:0.0000'
-        if count > 0:
-            # any following attempts to read, we get good data
-            msg = msg.replace('Y:MISTAKE', 'Y:0.0000')
-        count += 1
-        return msg
+        'ok MCS: X:0.0000 Y:MISTAKE Z:0.0000 A:0.0000 B:0.0000 C:0.0000',
+        # following attempts to read, we get good data
+        'ok MCS: X:0.0000 Y:321.00 Z:0.0000 A:0.0000 B:0.0000 C:0.0000'
+    ]
 
-    monkeypatch.setattr(driver, '_send_command', _new_send_message2)
-
-    driver.update_position()
+    await smoothie.update_position()
     expected = {
         'X': 0,
-        'Y': 0,
+        'Y': 321.00,
         'Z': 0,
         'A': 0,
         'B': 0,
         'C': 0
     }
-    assert driver.position == expected
-
-
-@pytest.mark.parametrize(
-    argnames=["cmd", "resp", "expected"],
-    argvalues=[
-        # Remove command from response
-        ["G28.2B", "G28.2B", ""],
-        ["G28.2B G1", "G28.2B G1", ""],
-        ["G28.2B G1", "G1G28.2BG1", ""],
-        # Remove command and whitespace from response
-        ["\r\nG52\r\n\r\n", "\r\nG52\r\n\r\n", ""],
-        ["\r\nG52\r\n\r\nsome-data\r\nok\r\n",
-         "\r\nG52\r\n\r\nsome-data\r\nok\r\nTESTS-RULE",
-         "TESTS-RULE"
-         ],
-        ["\r\nG52\r\n\r\nsome-data\r\nok\r\n",
-         "G52\r\n\r\nsome-data\r\nokT\r\nESTS-RULE",
-         "TESTS-RULE"],
-        # L is not a command echo but a token
-        ["M371 L \r\n\r\n",
-         "L:703130",
-         "L:703130"],
-        # R is not a command echo but a token
-        ["M3 R \r\n\r\n",
-         "M3R:703130",
-         "R:703130"],
-        ["M369 L \r\n\r\n",
-         "M369 L \r\n\r\nL:5032304D56323032303230303432323036000000000000000000000000000000",  # noqa: E501
-         "L:5032304D56323032303230303432323036000000000000000000000000000000"]
-    ]
-)
-def test_remove_serial_echo(
-        smoothie: driver.SmoothieDriver,
-        cmd: str, resp: str, expected: str):
-    """It should remove unwanted characters only."""
-    res = smoothie._remove_unwanted_characters(
-        cmd, resp)
-    assert res == expected
+    assert smoothie.position == expected
 
 
 def test_parse_position_response(smoothie):
     good_data = 'ok M114.2 X:10 Y:20 Z:30 A:40 B:50 C:60'
     bad_data = 'ok M114.2 X:10 Y:20: Z:30A:40 B:50 C:60'
-    res = driver._parse_position_response(good_data)
+    res = opentrons.drivers.asyncio.smoothie.parse_utils._parse_position_response(good_data)
     expected = {
         'X': 10,
         'Y': 20,
@@ -137,7 +101,7 @@ def test_parse_position_response(smoothie):
     }
     assert res == expected
     with pytest.raises(driver.ParseError):
-        driver._parse_position_response(bad_data)
+        opentrons.drivers.asyncio.smoothie.parse_utils._parse_position_response(bad_data)
 
 
 def test_dwell_and_activate_axes(smoothie, monkeypatch):
@@ -147,7 +111,7 @@ def test_dwell_and_activate_axes(smoothie, monkeypatch):
 
     def write_with_log(command, ack, connection, timeout, tag=None):
         command_log.append(command.strip())
-        return driver.SMOOTHIE_ACK
+        return opentrons.drivers.asyncio.smoothie.constants.SMOOTHIE_ACK
 
     def _parse_position_response(arg):
         return smoothie.position
@@ -189,7 +153,7 @@ def test_disable_motor(smoothie, monkeypatch):
 
     def write_with_log(command, ack, connection, timeout, tag=None):
         command_log.append(command.strip())
-        return driver.SMOOTHIE_ACK
+        return opentrons.drivers.asyncio.smoothie.constants.SMOOTHIE_ACK
 
     def _parse_position_response(arg):
         return smoothie.position
@@ -221,7 +185,7 @@ def test_plunger_commands(smoothie, monkeypatch):
 
     def write_with_log(command, ack, connection, timeout, tag=None):
         command_log.append(command.strip())
-        return driver.SMOOTHIE_ACK
+        return opentrons.drivers.asyncio.smoothie.constants.SMOOTHIE_ACK
 
     def _parse_position_response(arg):
         return smoothie.position
@@ -333,7 +297,7 @@ def test_move_with_split(smoothie, monkeypatch):
 
     def write_with_log(command, ack, connection, timeout, tag=None):
         command_log.append(command.strip())
-        return driver.SMOOTHIE_ACK
+        return opentrons.drivers.asyncio.smoothie.constants.SMOOTHIE_ACK
 
     def _parse_position_response(arg):
         return smoothie.position
@@ -387,7 +351,7 @@ def test_set_active_current(smoothie, monkeypatch):
 
     def write_with_log(command, ack, connection, timeout, tag=None):
         command_log.append(command.strip())
-        return driver.SMOOTHIE_ACK
+        return opentrons.drivers.asyncio.smoothie.constants.SMOOTHIE_ACK
 
     def _parse_position_response(arg):
         return smoothie.position
@@ -459,7 +423,7 @@ def test_set_acceleration(smoothie, monkeypatch):
 
     def write_with_log(command, ack, connection, timeout, tag=None):
         command_log.append(command.strip())
-        return driver.SMOOTHIE_ACK
+        return opentrons.drivers.asyncio.smoothie.constants.SMOOTHIE_ACK
 
     def _parse_position_response(arg):
         return smoothie.position
@@ -529,8 +493,8 @@ def test_parse_pipette_data():
     msg = 'TestsRule!!'
     mount = 'L'
     good_data = mount + ': ' \
-        + driver._byte_array_to_hex_string(msg.encode())
-    parsed = driver._parse_instrument_data(good_data).get(mount)
+                + opentrons.drivers.asyncio.smoothie.parse_utils._byte_array_to_hex_string(msg.encode())
+    parsed = opentrons.drivers.asyncio.smoothie.parse_utils._parse_instrument_data(good_data).get(mount)
     assert parsed.decode() == msg
 
 
@@ -544,14 +508,14 @@ def test_read_and_write_pipettes(smoothie, monkeypatch):
     def _new_send_message(
             command, timeout=None, suppress_error_msg=True):
         nonlocal written_id, written_model, mount
-        if driver.GCODE.READ_INSTRUMENT_ID in command:
+        if opentrons.drivers.asyncio.smoothie.constants.GCODE.READ_INSTRUMENT_ID in command:
             return mount + ': ' + written_id
-        elif driver.GCODE.READ_INSTRUMENT_MODEL in command:
+        elif opentrons.drivers.asyncio.smoothie.constants.GCODE.READ_INSTRUMENT_MODEL in command:
             return mount + ': ' + written_model
-        if driver.GCODE.WRITE_INSTRUMENT_ID in command:
+        if opentrons.drivers.asyncio.smoothie.constants.GCODE.WRITE_INSTRUMENT_ID in command:
             cmdstr = str(command)
             written_id = cmdstr[cmdstr.index(mount) + 1:]
-        elif driver.GCODE.WRITE_INSTRUMENT_MODEL in command:
+        elif opentrons.drivers.asyncio.smoothie.constants.GCODE.WRITE_INSTRUMENT_MODEL in command:
             cmdstr = str(command)
             written_model = cmdstr[cmdstr.index(mount) + 1:]
 
@@ -578,7 +542,7 @@ def test_read_pipette_v13(smoothie, monkeypatch):
 
     def _new_send_message(
             command, timeout=None, suppress_error_msg=True):
-        return 'L:' + driver._byte_array_to_hex_string(b'p300_single_v13')
+        return 'L:' + opentrons.drivers.asyncio.smoothie.parse_utils._byte_array_to_hex_string(b'p300_single_v13')
 
     monkeypatch.setattr(driver, '_send_command', _new_send_message)
 
@@ -692,9 +656,9 @@ def test_clear_limit_switch(smoothie, monkeypatch):
     def write_mock(command, ack, serial_connection, timeout, tag=None):
         nonlocal cmd_list
         cmd_list.append(command)
-        if driver.GCODE.MOVE in command:
+        if opentrons.drivers.asyncio.smoothie.constants.GCODE.MOVE in command:
             return "ALARM: Hard limit +C"
-        elif driver.GCODE.CURRENT_POSITION in command:
+        elif opentrons.drivers.asyncio.smoothie.constants.GCODE.CURRENT_POSITION in command:
             return 'ok M114.2 X:10 Y:20 Z:30 A:40 B:50 C:60'
         else:
             return "ok"

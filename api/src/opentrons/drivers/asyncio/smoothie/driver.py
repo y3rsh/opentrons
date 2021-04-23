@@ -4,30 +4,43 @@ import contextlib
 from os import environ
 import logging
 from time import sleep, time
-from threading import Event, RLock
+from threading import Event
 from typing import Any, Dict, Optional, Union, List, Tuple, cast
-from enum import Enum
 
 from math import isclose
 
-from opentrons.drivers.asyncio.smoothie.errors import ParseError, SmoothieError, \
+from opentrons.drivers.asyncio.smoothie.command_sender import \
+    SmoothieCommandSender
+from opentrons.drivers.asyncio.smoothie.constants import GCODE, HOMED_POSITION, \
+    Y_BOUND_OVERRIDE, SMOOTHIE_COMMAND_TERMINATOR, SMOOTHIE_ACK, \
+    PLUNGER_BACKLASH_MM, CURRENT_CHANGE_DELAY, PIPETTE_READ_DELAY, \
+    Y_SWITCH_BACK_OFF_MM, Y_SWITCH_REVERSE_BACK_OFF_MM, Y_BACKOFF_LOW_CURRENT, \
+    Y_BACKOFF_SLOW_SPEED, Y_RETRACT_SPEED, Y_RETRACT_DISTANCE, UNSTICK_DISTANCE, \
+    UNSTICK_SPEED, DEFAULT_AXES_SPEED, XY_HOMING_SPEED, HOME_SEQUENCE, AXES, \
+    DISABLE_AXES, SEC_PER_MIN, DEFAULT_ACK_TIMEOUT, DEFAULT_EXECUTE_TIMEOUT, \
+    DEFAULT_MOVEMENT_TIMEOUT, SMOOTHIE_BOOT_TIMEOUT, DEFAULT_STABILIZE_DELAY, \
+    DEFAULT_COMMAND_RETRIES, MICROSTEPPING_GCODES, GCODE_ROUNDING_PRECISION
+from opentrons.drivers.asyncio.smoothie.errors import SmoothieError, \
     SmoothieAlarm, TipProbeError
+from opentrons.drivers.asyncio.smoothie.parse_utils import \
+    _parse_position_response, _parse_instrument_data, \
+    _byte_array_to_ascii_string, _byte_array_to_hex_string, \
+    _parse_switch_values, _parse_homing_status_values
 from opentrons.drivers.command_builder import CommandBuilder
 from opentrons.drivers.serial_communication import get_ports_by_name
 from serial.serialutil import SerialException  # type: ignore
 
 from opentrons.config.types import RobotConfig
 from opentrons.config.robot_configs import current_for_revision
-from opentrons.drivers.asyncio.communication import SerialConnection, NoResponse
+from opentrons.drivers.asyncio.communication import SerialConnection, \
+    NoResponse, AlarmResponse, ErrorResponse
 from opentrons.drivers.types import MoveSplits
 from opentrons.drivers.utils import (
-    AxisMoveTimestamp, parse_key_values, parse_number, parse_optional_number
+    AxisMoveTimestamp, ParseError
 )
 from opentrons.drivers.rpi_drivers.gpio_simulator import SimulatingGPIOCharDev
 from opentrons.drivers.rpi_drivers.dev_types import GPIODriverLike
 from opentrons.system import smoothie_update
-from . import HOMED_POSITION, Y_BOUND_OVERRIDE
-
 
 """
 - Driver is responsible for providing an interface for motion control
@@ -43,203 +56,11 @@ log = logging.getLogger(__name__)
 ERROR_KEYWORD = 'error'
 ALARM_KEYWORD = 'alarm'
 
-PLUNGER_BACKLASH_MM = 0.3
-LOW_CURRENT_Z_SPEED = 30
-CURRENT_CHANGE_DELAY = 0.005
-PIPETTE_READ_DELAY = 0.1
 
-Y_SWITCH_BACK_OFF_MM = 28
-Y_SWITCH_REVERSE_BACK_OFF_MM = 10
-Y_BACKOFF_LOW_CURRENT = 0.8
-Y_BACKOFF_SLOW_SPEED = 50
-Y_RETRACT_SPEED = 8
-Y_RETRACT_DISTANCE = 3
-
-UNSTICK_DISTANCE = 1
-UNSTICK_SPEED = 1
-
-DEFAULT_AXES_SPEED = 400
-
-XY_HOMING_SPEED = 80
-
-HOME_SEQUENCE = ['ZABC', 'X', 'Y']
-AXES = ''.join(HOME_SEQUENCE)
 # Ignore these axis when sending move or home command
-DISABLE_AXES = ''
-
-MOVEMENT_ERROR_MARGIN = 1/160  # Largest movement in mm for any step
-SEC_PER_MIN = 60
-
-DEFAULT_ACK_TIMEOUT = 5
-DEFAULT_EXECUTE_TIMEOUT = 12000
-DEFAULT_SMOOTHIE_TIMEOUT = 1
-DEFAULT_MOVEMENT_TIMEOUT = 30
-SMOOTHIE_BOOT_TIMEOUT = 3
-DEFAULT_STABILIZE_DELAY = 0.1
-
-DEFAULT_COMMAND_RETRIES = 3
-
-
-class GCODE(str, Enum):
-    HOME = "G28.2"
-    MOVE = "G0"
-    DWELL = "G4"
-    CURRENT_POSITION = "M114.2"
-    LIMIT_SWITCH_STATUS = "M119"
-    PROBE = "G38.2"
-    ABSOLUTE_COORDS = "G90"
-    RELATIVE_COORDS = "G91"
-    RESET_FROM_ERROR = "M999"
-    PUSH_SPEED = "M120"
-    POP_SPEED = "M121"
-    SET_SPEED = "G0"
-    STEPS_PER_MM = "M92"
-    READ_INSTRUMENT_ID = "M369"
-    WRITE_INSTRUMENT_ID = "M370"
-    READ_INSTRUMENT_MODEL = "M371"
-    WRITE_INSTRUMENT_MODEL = "M372"
-    SET_MAX_SPEED = "M203.1"
-    SET_CURRENT = "M907"
-    DISENGAGE_MOTOR = "M18"
-    HOMING_STATUS = "G28.6"
-    ACCELERATION = "M204"
-    WAIT = "M400"
-    PIPETTE_RETRACT = "M365.3"
-    PIPETTE_DEBOUNCE = "M365.2"
-    PIPETTE_MAX_TRAVEL = "M365.1"
-    PIPETTE_HOME = "M365.0"
-    MICROSTEPPING_B_ENABLE = "M52"
-    MICROSTEPPING_B_DISABLE = "M53"
-    MICROSTEPPING_C_ENABLE = "M54"
-    MICROSTEPPING_C_DISABLE = "M55"
-    VERSION = "version"
-
-
-MICROSTEPPING_GCODES = {
-    'B': {
-        'ENABLE': GCODE.MICROSTEPPING_B_ENABLE,
-        'DISABLE': GCODE.MICROSTEPPING_B_DISABLE,
-    },
-    'C': {
-        'ENABLE': GCODE.MICROSTEPPING_C_ENABLE,
-        'DISABLE': GCODE.MICROSTEPPING_C_DISABLE,
-    }
-}
 
 # Number of digits after the decimal point for coordinates being sent
 # to Smoothie
-GCODE_ROUNDING_PRECISION = 3
-
-SMOOTHIE_COMMAND_TERMINATOR = '\r\n\r\n'
-SMOOTHIE_ACK = 'ok\r\nok\r\n'
-
-
-def _parse_position_response(raw_axis_values) -> Dict[str, float]:
-    parsed_values = parse_key_values(raw_axis_values)
-    if len(parsed_values) < 6:
-        msg = f'Unexpected response in _parse_position_response: {raw_axis_values}'
-        log.error(msg)
-        raise ParseError(msg)
-
-    data = {
-        k.title(): parse_number(v, GCODE_ROUNDING_PRECISION)
-        for k, v in parsed_values.items()
-    }
-    return data
-
-
-def _parse_instrument_data(smoothie_response):
-    try:
-        items = smoothie_response.split('\n')[0].strip().split(':')
-        mount = items[0]
-        # data received from Smoothieware is stringified HEX values
-        # because of how Smoothieware handles GCODE messages
-        data = bytearray.fromhex(items[1])
-    except (ValueError, IndexError, TypeError, AttributeError):
-        raise ParseError(
-            f'Unexpected argument to _parse_instrument_data: {smoothie_response}'
-        )
-    return {mount: data}
-
-
-def _byte_array_to_ascii_string(byte_array):
-    # remove trailing null characters
-    try:
-        for c in [b'\x00', b'\xFF']:
-            if c in byte_array:
-                byte_array = byte_array[:byte_array.index(c)]
-        res = byte_array.decode()
-    except (ValueError, TypeError, AttributeError):
-        log.exception('Unexpected argument to _byte_array_to_ascii_string:')
-        raise ParseError(
-            f'Unexpected argument to _byte_array_to_ascii_string: {byte_array}'
-        )
-    return res
-
-
-def _byte_array_to_hex_string(byte_array):
-    # data must be sent as stringified HEX values
-    # because of how Smoothieware parses GCODE messages
-    try:
-        res = ''.join('%02x' % b for b in byte_array)
-    except TypeError:
-        log.exception('Unexpected argument to _byte_array_to_hex_string:')
-        raise ParseError(
-            f'Unexpected argument to _byte_array_to_hex_string: {byte_array}'
-        )
-    return res
-
-
-def _parse_switch_values(raw_switch_values: str) -> Dict[str, bool]:
-    if not raw_switch_values or not isinstance(raw_switch_values, str):
-        raise ParseError(
-            f'Unexpected argument to _parse_switch_values: {raw_switch_values}'
-        )
-
-    # probe has a space after it's ":" for some reason
-    if 'Probe: ' in raw_switch_values:
-        raw_switch_values = raw_switch_values.replace('Probe: ', 'Probe:')
-
-    parsed_values = parse_key_values(raw_switch_values)
-    res = {
-        k.title(): bool(parse_optional_number(v, rounding_val=GCODE_ROUNDING_PRECISION))
-        for (k, v) in parsed_values.items()
-        if any(n in k for n in ['max', 'Probe'])
-    }
-    # remove the extra "_max" character from each axis key in the dict
-    res = {
-        key.split('_')[0]: val
-        for key, val in res.items()
-    }
-    if len((list(AXES) + ['Probe']) & res.keys()) != 7:
-        raise ParseError(
-            f'Unexpected argument to _parse_switch_values: {raw_switch_values}'
-        )
-    return res
-
-
-def _parse_homing_status_values(raw_homing_status_values):
-    """
-    Parse the Smoothieware response to a G28.6 command (homing-status)
-    A "1" means it has been homed, and "0" means it has not been homed
-
-    Example response after homing just X axis:
-    "X:1 Y:0 Z:0 A:0 B:0 C:0"
-
-    returns: dict
-        Key is axis, value is True if the axis needs to be homed
-    """
-    parsed_values = parse_key_values(raw_homing_status_values)
-    res = {
-        k.title(): bool(parse_number(v, GCODE_ROUNDING_PRECISION))
-        for k, v in parsed_values.items()
-    }
-    if len(list(AXES) & res.keys()) != 6:
-        raise ParseError(
-            f'Unexpected argument to '
-            f'_parse_homing_status_values: {raw_homing_status_values}'
-        )
-    return res
 
 
 def _command_builder() -> CommandBuilder:
@@ -277,13 +98,15 @@ class SmoothieDriver:
         gpio_chardev = gpio_chardev or SimulatingGPIOCharDev('simulated')
 
         return cls(
-            config=config, connection=connection, gpio_chardev=gpio_chardev
+            config=config,
+            connection=SmoothieCommandSender(connection=connection),
+            gpio_chardev=gpio_chardev
         )
 
     def __init__(
             self,
             config: RobotConfig,
-            connection: SerialConnection,
+            connection: SmoothieCommandSender,
             gpio_chardev: GPIODriverLike):
         """
         Constructor
@@ -406,13 +229,10 @@ class SmoothieDriver:
             for axis, value in target.items() if value is not None
         })
 
-    def update_position(self, default=None):
-        if default is None:
-            default = self._position
-
-        def _recursive_update_position(retries):
+    async def update_position(self):
+        async def _recursive_update_position(retries):
             try:
-                position_response = self._send_command(
+                position_response = await self._send_command(
                     _command_builder().add_gcode(gcode=GCODE.CURRENT_POSITION)
                 )
                 return _parse_position_response(position_response)
@@ -420,10 +240,10 @@ class SmoothieDriver:
                 retries -= 1
                 if retries <= 0:
                     raise e
-                sleep(DEFAULT_STABILIZE_DELAY)
-                return _recursive_update_position(retries)
+                await asyncio.sleep(DEFAULT_STABILIZE_DELAY)
+                return await _recursive_update_position(retries)
 
-        updated_position = _recursive_update_position(
+        updated_position = await _recursive_update_position(
             DEFAULT_COMMAND_RETRIES)
 
         self._update_position(updated_position)
@@ -1012,10 +832,9 @@ class SmoothieDriver:
             be infinite. This is almost certainly not what you want.
         """
         try:
-            with self._serial_lock:
-                return await self._send_command_unsynchronized(
-                    command, ack_timeout, timeout
-                )
+            return await self._send_command_unsynchronized(
+                command, ack_timeout, timeout
+            )
         except SmoothieError as se:
             # XXX: This is a reentrancy error because another command could
             # swoop in here. We're already resetting though and errors (should
@@ -1031,28 +850,35 @@ class SmoothieDriver:
                 if error_axis not in 'XYZABC':
                     error_axis = AXES
                 log.info("Homing after alarm/error")
-                self.home(error_axis)
+                await self.home(error_axis)
             raise SmoothieError(se.ret_code, str(command))
 
     async def _send_command_unsynchronized(
             self, command: CommandBuilder,
             ack_timeout: float, execute_timeout: float):
-        command_str = command.build()
-        cmd_ret = await self._connection.send_command(
-            data=command_str, retries=DEFAULT_COMMAND_RETRIES
-        )
-        cmd_ret = self._remove_unwanted_characters(command_str, cmd_ret)
-        self._handle_return(cmd_ret)
-        wait_ret = await self._connection.send_command(
-            _command_builder().add_gcode(gcode=GCODE.WAIT).build()
-        )
-        wait_ret = self._remove_unwanted_characters(
-            _command_builder().add_gcode(gcode=GCODE.WAIT).build(),
-            wait_ret)
-        self._handle_return(wait_ret)
-        return cmd_ret.strip()
+        """
 
-    def _handle_return(self, ret_code: str):
+        Args:
+            command:
+            ack_timeout:
+            execute_timeout:
+
+        Returns:
+
+        """
+        try:
+            return await self._connection.send_command(
+                command=command,
+                retries=DEFAULT_COMMAND_RETRIES
+            )
+        except AlarmResponse as e:
+            self._handle_return(ret_code=str(e), is_alarm=True)
+        except ErrorResponse as e:
+            self._handle_return(ret_code=str(e), is_error=True)
+
+    def _handle_return(
+            self, ret_code: str, is_alarm: bool = False, is_error: bool = False
+    ):
         """ Check the return string from smoothie for an error condition.
 
         Usually raises a SmoothieError, which can be handled by the error
@@ -1062,8 +888,6 @@ class SmoothieDriver:
         handled elsewhere. In that case, we raise SmoothieAlarm, which isn't
         (and shouldn't be) handled by the normal error handling.
         """
-        is_alarm = ALARM_KEYWORD in ret_code.lower()
-        is_error = ERROR_KEYWORD in ret_code.lower()
         if self._is_hard_halting.is_set():
             # This is the alarm from setting the hard halt
             if is_alarm:
@@ -1089,38 +913,6 @@ class SmoothieDriver:
                    and 'after halt you should home' not in ret_code.lower():
                     log.error(f"alarm/error outside hard halt: {ret_code}")
                     raise SmoothieError(ret_code)
-
-    def _remove_unwanted_characters(self, command: str, response: str) -> str:
-        # smoothieware can enter a weird state, where it repeats back
-        # the sent command at the beginning of its response.
-        # Check for this echo, and strips the command from the response
-        def _is_token_command(_s: str) -> bool:
-            """check if token is a command"""
-            # A single letter token cannot be assumed to be a command.
-            # For example: "M369 L" response is "L:2132121212".
-            return len(_s) > 1
-        # Split at spaces.
-        tokens = (c.strip() for c in command.strip().split(' '))
-        # A list of commands to remove from response. Including the entire
-        # command.
-        remove_from_response = [command] + [
-            c for c in tokens if _is_token_command(c)
-        ]
-
-        # also removing any inadvertent newline/return characters
-        # this is ok because all data we need from Smoothie is returned on
-        # the first line in the response
-        remove_from_response += ['\r', '\n']
-        modified_response = str(response)
-
-        for cmd in remove_from_response:
-            modified_response = modified_response.replace(cmd, '')
-
-        if modified_response != response:
-            log.debug(f'Removed characters from response: {response}')
-            log.debug(f'Newly formatted response: {modified_response}')
-
-        return modified_response
 
     def _home_x(self):
         log.debug("_home_x")
@@ -1244,7 +1036,7 @@ class SmoothieDriver:
         log.debug("sent abs")
         self._save_current(self.current, axes_active=False)
         log.debug("sent current")
-        self.update_position(default=self.homed_position)
+        self.update_position()
         self.pop_axis_max_speed()
         self.pop_speed()
         self.pop_acceleration()
@@ -1403,8 +1195,8 @@ class SmoothieDriver:
             from the current position cache
             """
             return not (
-                (axis in DISABLE_AXES) or
-                isclose(coord, self.position[axis],
+                    (axis in DISABLE_AXES) or
+                    isclose(coord, self.position[axis],
                         rel_tol=1e-05, abs_tol=1e-08)
             )
 

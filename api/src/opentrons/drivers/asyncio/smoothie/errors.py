@@ -37,7 +37,3 @@ class TipProbeError(SmoothieAlarm):
     def __str__(self):
         return 'Tip probe could not complete: the switch was never touched. '\
             'This may be because there is no tip on the pipette.'
-
-
-class ParseError(Exception):
-    pass
