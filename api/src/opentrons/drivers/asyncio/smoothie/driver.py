@@ -421,7 +421,7 @@ class SmoothieDriver:
             return None
         return self._connection.port
 
-    def get_fw_version(self) -> str:
+    async def get_fw_version(self) -> str:
         """
         Queries Smoothieware for it's build version, and returns
         the parsed response.
@@ -436,7 +436,7 @@ class SmoothieDriver:
           CNC Build   NOMSD Build
         6 axis
         """
-        version = self._send_command(_command_builder().add_gcode(
+        version = await self._send_command(_command_builder().add_gcode(
             gcode=GCODE.VERSION))
         version = version.split(',')[0].split(':')[-1].strip()
         version = version.replace('NOMSD', '')
@@ -455,15 +455,14 @@ class SmoothieDriver:
         """
         return {k.upper(): v for k, v in self._position.items()}
 
-    @property
-    def switch_state(self) -> Dict[str, bool]:
+    async def switch_state(self) -> Dict[str, bool]:
         """Returns the state of all SmoothieBoard limit switches"""
-        res = self._send_command(_command_builder().add_gcode(
+        res = await self._send_command(_command_builder().add_gcode(
             gcode=GCODE.LIMIT_SWITCH_STATUS
         ))
         return _parse_switch_values(res)
 
-    def update_homed_flags(
+    async def update_homed_flags(
             self, flags: Dict[str, bool] = None):
         """
         Returns Smoothieware's current homing-status, which is a dictionary
@@ -477,9 +476,9 @@ class SmoothieDriver:
 
         elif self.is_connected():
 
-            def _recursive_update_homed_flags(retries: int):
+            async def _recursive_update_homed_flags(retries: int):
                 try:
-                    res = self._send_command(
+                    res = await self._send_command(
                         _command_builder().add_gcode(gcode=GCODE.HOMING_STATUS))
                     flags = _parse_homing_status_values(res)
                     self.homed_flags.update(flags)
@@ -488,9 +487,9 @@ class SmoothieDriver:
                     if retries <= 0:
                         raise e
                     sleep(DEFAULT_STABILIZE_DELAY)
-                    return _recursive_update_homed_flags(retries)
+                    return await _recursive_update_homed_flags(retries)
 
-            _recursive_update_homed_flags(DEFAULT_COMMAND_RETRIES)
+            await _recursive_update_homed_flags(DEFAULT_COMMAND_RETRIES)
 
     @property
     def current(self) -> Dict[str, float]:
@@ -517,13 +516,13 @@ class SmoothieDriver:
             gcode=GCODE.SET_SPEED
         ).add_int(prefix="F", value=int(float(speed) * SEC_PER_MIN))
 
-    def set_speed(self, value: Union[float, str], update: bool = True):
+    async  def set_speed(self, value: Union[float, str], update: bool = True):
         """ set total axes movement speed in mm/second"""
         if update:
             self._combined_speed = float(value)
         command = self._build_speed_command(float(value))
         log.debug(f"set_speed: {command}")
-        self._send_command(command)
+        await self._send_command(command)
 
     def push_speed(self):
         self._saved_axes_speed = float(self._combined_speed)
@@ -539,7 +538,7 @@ class SmoothieDriver:
         finally:
             self.set_axis_max_speed(self._max_speed_settings)  # type: ignore
 
-    def set_axis_max_speed(
+    async def set_axis_max_speed(
             self, settings: Dict[str, float], update: bool = True):
         """
         Sets the maximum speed (mm/sec) that a given axis will move
@@ -560,15 +559,15 @@ class SmoothieDriver:
             )
 
         log.debug(f"set_axis_max_speed: {command}")
-        self._send_command(command)
+        await self._send_command(command)
 
     def push_axis_max_speed(self):
         self._saved_max_speed_settings = self._max_speed_settings.copy()
 
-    def pop_axis_max_speed(self):
-        self.set_axis_max_speed(self._saved_max_speed_settings)  # type: ignore
+    async def pop_axis_max_speed(self):
+        await self.set_axis_max_speed(self._saved_max_speed_settings)  # type: ignore
 
-    def set_acceleration(self, settings: Dict[str, float]):
+    async def set_acceleration(self, settings: Dict[str, float]):
         """
         Sets the acceleration (mm/sec^2) that a given axis will move
 
@@ -587,7 +586,7 @@ class SmoothieDriver:
             command.add_float(prefix=axis, value=value, precision=None)
 
         log.debug(f"set_acceleration: {command}")
-        self._send_command(command)
+        await self._send_command(command)
 
     def push_acceleration(self):
         self._saved_acceleration = self._acceleration.copy()
@@ -682,13 +681,13 @@ class SmoothieDriver:
         self._current_settings['now'].update(settings)
         log.debug(f"_save_current: {self.current}")
 
-    def _set_saved_current(self):
+    async def _set_saved_current(self) -> None:
         """
         Sends the driver's current settings to the serial port as gcode. Call
         this method to set the axis-current state on the actual Smoothie
         motor-driver.
         """
-        self._send_command(self._generate_current_command())
+        await self._send_command(self._generate_current_command())
 
     def _generate_current_command(self) -> CommandBuilder:
         """
@@ -708,7 +707,7 @@ class SmoothieDriver:
         log.debug(f"_generate_current_command: {command}")
         return command
 
-    def disengage_axis(self, axes: str):
+    async def disengage_axis(self, axes: str):
         """
         Disable the stepper-motor-driver's 36v output to motor
         This is a safe GCODE to send to Smoothieware, as it will automatically
@@ -718,10 +717,11 @@ class SmoothieDriver:
             String containing the axes to be disengaged
             (e.g.: 'XY' or 'ZA' or 'XYZABC')
         """
-        axes = ''.join(set(axes.upper()) & set(AXES))
+        available_axes = set(AXES)
+        axes = ''.join(a for a in axes.upper() if a in available_axes)
         if axes:
             log.debug(f"disengage_axis: {axes}")
-            self._send_command(
+            await self._send_command(
                 _command_builder().add_gcode(
                     gcode=GCODE.DISENGAGE_MOTOR
                 ).add_element(element=axes))
@@ -786,7 +786,7 @@ class SmoothieDriver:
         await self._send_command(
             _command_builder().add_gcode(gcode=GCODE.RESET_FROM_ERROR)
         )
-        self.update_homed_flags()
+        await self.update_homed_flags()
 
     # Potential place for command optimization (buffering, flushing, etc)
     async def _send_command(
@@ -914,12 +914,12 @@ class SmoothieDriver:
                     log.error(f"alarm/error outside hard halt: {ret_code}")
                     raise SmoothieError(ret_code)
 
-    def _home_x(self):
+    async def _home_x(self):
         log.debug("_home_x")
         # move the gantry forward on Y axis with low power
         self._save_current({'Y': Y_BACKOFF_LOW_CURRENT})
         self.push_axis_max_speed()
-        self.set_axis_max_speed({'Y': Y_BACKOFF_SLOW_SPEED})
+        await self.set_axis_max_speed({'Y': Y_BACKOFF_SLOW_SPEED})
 
         # move away from the Y endstop switch, then backward half that distance
         relative_retract_command = _command_builder().add_gcode(
@@ -943,13 +943,13 @@ class SmoothieDriver:
         command = self._generate_current_command().add_builder(
             builder=relative_retract_command
         )
-        self._send_command(command)
+        await self._send_command(command)
         self.dwell_axes('Y')
 
         # time it is safe to home the X axis
         try:
             # override firmware's default XY homing speed, to avoid resonance
-            self.set_axis_max_speed({'X': XY_HOMING_SPEED})
+            await self.set_axis_max_speed({'X': XY_HOMING_SPEED})
             self.activate_axes('X')
             command = self._generate_current_command().add_gcode(
                 gcode=GCODE.HOME
@@ -957,19 +957,19 @@ class SmoothieDriver:
             # home commands are acked after execution rather than queueing, so
             # we want a long ack timeout and a short execution timeout
             home_timeout = (HOMED_POSITION['X'] / XY_HOMING_SPEED) * 2
-            self._send_command(command, ack_timeout=home_timeout,
+            await self._send_command(command, ack_timeout=home_timeout,
                                timeout=5)
-            self.update_homed_flags(flags={'X': True})
+            await self.update_homed_flags(flags={'X': True})
         finally:
-            self.pop_axis_max_speed()
+            await self.pop_axis_max_speed()
             self.dwell_axes('X')
-            self._set_saved_current()
+            await self._set_saved_current()
 
-    def _home_y(self):
+    async def _home_y(self):
         log.debug("_home_y")
         # override firmware's default XY homing speed, to avoid resonance
         self.push_axis_max_speed()
-        self.set_axis_max_speed({'Y': XY_HOMING_SPEED})
+        await self.set_axis_max_speed({'Y': XY_HOMING_SPEED})
 
         self.activate_axes('Y')
         # home the Y at normal speed (fast)
@@ -978,11 +978,11 @@ class SmoothieDriver:
         ).add_element("Y")
         fast_home_timeout = (HOMED_POSITION['Y'] / XY_HOMING_SPEED) * 2
         # home commands are executed before ack, set a long ack timeout
-        self._send_command(command, ack_timeout=fast_home_timeout,
+        await self._send_command(command, ack_timeout=fast_home_timeout,
                            timeout=5)
 
         # slow the maximum allowed speed on Y axis
-        self.set_axis_max_speed({'Y': Y_RETRACT_SPEED})
+        await self.set_axis_max_speed({'Y': Y_RETRACT_SPEED})
 
         # retract, then home, then retract again
         relative_retract_command = _command_builder().add_gcode(
@@ -998,46 +998,46 @@ class SmoothieDriver:
             gcode=GCODE.ABSOLUTE_COORDS
         )
         try:
-            self._send_command(relative_retract_command)
+            await self._send_command(relative_retract_command)
             # home commands are executed before ack, use a long ack timeout
             slow_timeout = (Y_RETRACT_DISTANCE / Y_RETRACT_SPEED) * 2
-            self._send_command(
+            await self._send_command(
                 _command_builder().add_gcode(gcode=GCODE.HOME).add_element("Y"),
                 ack_timeout=slow_timeout,
                 timeout=5)
-            self.update_homed_flags(flags={'Y': True})
-            self._send_command(
+            await self.update_homed_flags(flags={'Y': True})
+            await self._send_command(
                 relative_retract_command)
         finally:
-            self.pop_axis_max_speed()  # bring max speeds back to normal
+            await self.pop_axis_max_speed()  # bring max speeds back to normal
             self.dwell_axes('Y')
-            self._set_saved_current()
+            await self._set_saved_current()
 
-    def _setup(self):
+    async def _setup(self):
         log.debug("_setup")
         try:
-            self._wait_for_ack()
+            await self._wait_for_ack()
         except NoResponse:
             # incase motor-driver is stuck in bootloader and unresponsive,
             # use gpio to reset into a ktimen state
             log.debug("wait for ack failed, resetting")
             self._smoothie_reset()
         log.debug("wait for ack done")
-        self._reset_from_error()
+        await self._reset_from_error()
         log.debug("_reset")
         self.update_steps_per_mm(self._config.gantry_steps_per_mm)
         self.update_steps_per_mm({
             ax: self._config.default_pipette_configs['stepsPerMM']
             for ax in 'BC'})
         log.debug("sent steps")
-        self._send_command(
+        await self._send_command(
             _command_builder().add_gcode(gcode=GCODE.ABSOLUTE_COORDS)
         )
         log.debug("sent abs")
         self._save_current(self.current, axes_active=False)
         log.debug("sent current")
-        self.update_position()
-        self.pop_axis_max_speed()
+        await self.update_position()
+        await self.pop_axis_max_speed()
         self.pop_speed()
         self.pop_acceleration()
         log.debug("setup done")
@@ -1089,8 +1089,8 @@ class SmoothieDriver:
             # EMI interference from both plunger motors has been found to
             # prevent the I2C lines from communicating between Smoothieware and
             # pipette's onboard EEPROM. To avoid, turn off both plunger motors
-            self.disengage_axis('ZABC')
-            self.delay(PIPETTE_READ_DELAY)
+            await self.disengage_axis('ZABC')
+            await self.delay(PIPETTE_READ_DELAY)
             # request from Smoothieware the information from that pipette
             res = await self._send_command(
                 _command_builder().add_gcode(gcode=gcode).add_element(allowed_mount),
@@ -1130,8 +1130,8 @@ class SmoothieDriver:
         # EMI interference from both plunger motors has been found to
         # prevent the I2C lines from communicating between Smoothieware and
         # pipette's onboard EEPROM. To avoid, turn off both plunger motors
-        self.disengage_axis('BC')
-        self.delay(CURRENT_CHANGE_DELAY)
+        await self.disengage_axis('BC')
+        await self.delay(CURRENT_CHANGE_DELAY)
         # data is read/written as strings of HEX characters
         # to avoid firmware weirdness in how it parses GCode arguments
         byte_string = _byte_array_to_hex_string(
@@ -1339,25 +1339,25 @@ class SmoothieDriver:
         if home_flagged_axes:
             self.home_flagged_axes(''.join(list(target.keys())))
 
-        def _do_split():
+        async def _do_split():
             try:
                 for sc in (c for c in (split_prefix, split_command) if c):
-                    self._send_command(sc)
+                    await self._send_command(sc)
             finally:
                 if split_postfix:
-                    self._send_command(split_postfix)
+                    await self._send_command(split_postfix)
         try:
             log.debug(f"move: {command}")
             # TODO (hmg) a movement's timeout should be calculated by
             # how long the movement is expected to take.
-            _do_split()
+            await _do_split()
             await self._send_command(command, timeout=DEFAULT_EXECUTE_TIMEOUT)
         finally:
             # dwell pipette motors because they get hot
             plunger_axis_moved = ''.join(set('BC') & set(target.keys()))
             if plunger_axis_moved:
                 self.dwell_axes(plunger_axis_moved)
-                self._set_saved_current()
+                await self._set_saved_current()
             self._axes_moved_at.mark_moved(moving_axes)
 
         self._update_position(target)
@@ -1401,13 +1401,13 @@ class SmoothieDriver:
         log.info(f"Homing axes {axis} in sequence {home_sequence}")
         for axes in home_sequence:
             if 'X' in axes:
-                self._home_x()
+                await self._home_x()
             elif 'Y' in axes:
-                self._home_y()
+                await self._home_y()
             else:
                 # if we are homing neither the X nor Y axes, simple home
                 self.activate_axes(axes)
-                self._do_relative_splits_during_home_for(
+                await self._do_relative_splits_during_home_for(
                     ''.join(ax for ax in axes if ax in 'BC'))
 
                 command = self._generate_current_command()
@@ -1422,11 +1422,11 @@ class SmoothieDriver:
                     await self._send_command(
                         command, ack_timeout=DEFAULT_EXECUTE_TIMEOUT,
                         timeout=DEFAULT_ACK_TIMEOUT)
-                    self.update_homed_flags(flags={ax: True for ax in axes})
+                    await self.update_homed_flags(flags={ax: True for ax in axes})
                 finally:
                     # always dwell an axis after it has been homed
                     self.dwell_axes(axes)
-                    self._set_saved_current()
+                    await self._set_saved_current()
 
         # Only update axes that have been selected for homing
         homed_axes = "".join(home_sequence)
@@ -1434,7 +1434,7 @@ class SmoothieDriver:
             ax: self.homed_position.get(ax)
             for ax in homed_axes
         }
-        self.update_position(default=homed)
+        await self.update_position()
 
         for ax in homed_axes:
             self.engaged_axes[ax] = True
@@ -1487,7 +1487,7 @@ class SmoothieDriver:
         ).add_float(prefix='P', value=0.01, precision=None)
         return prefix, postfix
 
-    def _do_relative_splits_during_home_for(self, axes: str):
+    async def _do_relative_splits_during_home_for(self, axes: str):
         """ Handle split moves for unsticking axes before home.
 
         This is particularly ugly bit of code that flips the motor controller
@@ -1554,13 +1554,13 @@ class SmoothieDriver:
             ]
         try:
             for command_string in command_sequence:
-                self._send_command(
+                await self._send_command(
                     command_string, timeout=DEFAULT_EXECUTE_TIMEOUT,
                     suppress_home_after_error=True)
         except SmoothieError:
             pass
         finally:
-            self._send_command(
+            await self._send_command(
                 _command_builder().add_gcode(
                     gcode=GCODE.ABSOLUTE_COORDS
                 ).add_builder(
@@ -1652,7 +1652,7 @@ class SmoothieDriver:
     def resume(self):
         self.run_flag.set()
 
-    def delay(self, seconds: float):
+    async def delay(self, seconds: float):
         # per http://smoothieware.org/supported-g-codes:
         # In grbl mode P is float seconds to comply with gcode standards
         command = _command_builder().add_gcode(
@@ -1662,9 +1662,9 @@ class SmoothieDriver:
         )
 
         log.debug(f"delay: {command}")
-        self._send_command(command, timeout=int(seconds) + 1)
+        await self._send_command(command, timeout=int(seconds) + 1)
 
-    def probe_axis(
+    async def probe_axis(
             self, axis: str, probing_distance: float) -> Dict[str, float]:
         if axis.upper() in AXES:
             self.engaged_axes[axis] = True
@@ -1677,17 +1677,17 @@ class SmoothieDriver:
             )
             log.debug(f"probe_axis: {command}")
             try:
-                self._send_command(
+                await self._send_command(
                     command=command, ack_timeout=DEFAULT_MOVEMENT_TIMEOUT,
                     suppress_home_after_error=True)
             except SmoothieError as se:
                 log.exception("Tip probe failure")
-                self.home(axis)
+                await self.home(axis)
                 if 'probe' in str(se).lower():
                     raise TipProbeError(se.ret_code, se.command)
                 else:
                     raise
-            self.update_position(self.position)
+            await self.update_position()
             return self.position
         else:
             raise RuntimeError(f"Cant probe axis {axis}")

@@ -7,6 +7,7 @@ from unittest.mock import Mock
 import pytest
 from opentrons.drivers.asyncio.smoothie.command_sender import \
     SmoothieCommandSender
+from opentrons.drivers.rpi_drivers.gpio_simulator import SimulatingGPIOCharDev
 from opentrons.drivers.types import MoveSplit
 
 from tests.opentrons.conftest import fuzzy_assert
@@ -22,20 +23,20 @@ def mock_connection() -> AsyncMock:
 
 
 @pytest.fixture
-def mock_gpio() -> Mock:
+def sim_gpio() -> SimulatingGPIOCharDev:
     """The mock GPI."""
-    return Mock()
+    return SimulatingGPIOCharDev("sim")
 
 
 @pytest.fixture
-def smoothie(mock_connection: AsyncMock, mock_gpio: Mock) -> driver.SmoothieDriver:
+def smoothie(mock_connection: AsyncMock, sim_gpio) -> driver.SmoothieDriver:
     """The smoothie driver under test."""
     from opentrons.config import robot_configs
 
     d = driver.SmoothieDriver(
         connection=mock_connection,
         config=robot_configs.load(),
-        gpio_chardev=mock_gpio
+        gpio_chardev=sim_gpio
     )
     yield d
 
@@ -88,6 +89,7 @@ async def test_update_position_retry(
 
 
 def test_parse_position_response(smoothie):
+    # TODO move this outta here
     good_data = 'ok M114.2 X:10 Y:20 Z:30 A:40 B:50 C:60'
     bad_data = 'ok M114.2 X:10 Y:20: Z:30A:40 B:50 C:60'
     res = opentrons.drivers.asyncio.smoothie.parse_utils._parse_position_response(good_data)
@@ -104,156 +106,108 @@ def test_parse_position_response(smoothie):
         opentrons.drivers.asyncio.smoothie.parse_utils._parse_position_response(bad_data)
 
 
-def test_dwell_and_activate_axes(smoothie, monkeypatch):
+async def test_dwell_and_activate_axes(smoothie: driver.SmoothieDriver, mock_connection: AsyncMock) -> None:
     command_log = []
-    smoothie._setup()
-    smoothie.simulating = False
 
-    def write_with_log(command, ack, connection, timeout, tag=None):
-        command_log.append(command.strip())
+    async def write_with_log(command, retries=0):
+        command_log.append(command.build().strip())
         return opentrons.drivers.asyncio.smoothie.constants.SMOOTHIE_ACK
 
-    def _parse_position_response(arg):
-        return smoothie.position
-
-    monkeypatch.setattr(serial_communication, 'write_and_return',
-                        write_with_log)
-    monkeypatch.setattr(
-        driver, '_parse_position_response', _parse_position_response)
+    mock_connection.send_command.side_effect = write_with_log
 
     smoothie.activate_axes('X')
-    smoothie._set_saved_current()
+    await smoothie._set_saved_current()
     smoothie.dwell_axes('X')
-    smoothie._set_saved_current()
+    await smoothie._set_saved_current()
     smoothie.activate_axes('XYBC')
-    smoothie._set_saved_current()
+    await smoothie._set_saved_current()
     smoothie.dwell_axes('XC')
-    smoothie._set_saved_current()
+    await smoothie._set_saved_current()
     smoothie.dwell_axes('BCY')
-    smoothie._set_saved_current()
+    await smoothie._set_saved_current()
     expected = [
-        ['M907 A0.1 B0.05 C0.05 X1.25 Y0.3 Z0.1 G4 P0.005'],
-        ['M400'],
-        ['M907 A0.1 B0.05 C0.05 X0.3 Y0.3 Z0.1 G4 P0.005'],
-        ['M400'],
-        ['M907 A0.1 B0.05 C0.05 X1.25 Y1.25 Z0.1 G4 P0.005'],
-        ['M400'],
-        ['M907 A0.1 B0.05 C0.05 X0.3 Y1.25 Z0.1 G4 P0.005'],
-        ['M400'],
-        ['M907 A0.1 B0.05 C0.05 X0.3 Y0.3 Z0.1 G4 P0.005'],
-        ['M400'],
+        'M907 A0.1 B0.05 C0.05 X1.25 Y0.3 Z0.1 G4 P0.005',
+        'M907 A0.1 B0.05 C0.05 X0.3 Y0.3 Z0.1 G4 P0.005',
+        'M907 A0.1 B0.05 C0.05 X1.25 Y1.25 Z0.1 G4 P0.005',
+        'M907 A0.1 B0.05 C0.05 X0.3 Y1.25 Z0.1 G4 P0.005',
+        'M907 A0.1 B0.05 C0.05 X0.3 Y0.3 Z0.1 G4 P0.005',
     ]
+    assert command_log == expected
 
-    fuzzy_assert(result=command_log, expected=expected)
 
-
-def test_disable_motor(smoothie, monkeypatch):
+async def test_disable_motor(smoothie: driver.SmoothieDriver, mock_connection: AsyncMock):
     command_log = []
-    smoothie.simulating = False
 
-    def write_with_log(command, ack, connection, timeout, tag=None):
-        command_log.append(command.strip())
+    def write_with_log(command, retries=0):
+        command_log.append(command.build().strip())
         return opentrons.drivers.asyncio.smoothie.constants.SMOOTHIE_ACK
 
-    def _parse_position_response(arg):
-        return smoothie.position
+    mock_connection.send_command.side_effect = write_with_log
 
-    monkeypatch.setattr(serial_communication, 'write_and_return',
-                        write_with_log)
-    monkeypatch.setattr(
-        driver, '_parse_position_response', _parse_position_response)
-
-    smoothie.disengage_axis('X')
-    smoothie.disengage_axis('XYZ')
-    smoothie.disengage_axis('ABCD')
+    await smoothie.disengage_axis('X')
+    await smoothie.disengage_axis('XYZ')
+    await smoothie.disengage_axis('ABCD')
     expected = [
-        ['M18 X'],
-        ['M400'],
-        ['M18 [XYZ]+'],
-        ['M400'],
-        ['M18 [ABC]+'],
-        ['M400'],
+        'M18 X',
+        'M18 XYZ',
+        'M18 ABC',
     ]
-    fuzzy_assert(result=command_log, expected=expected)
+    assert command_log == expected
 
 
-def test_plunger_commands(smoothie, monkeypatch):
-    command_log = []
-    smoothie._setup()
-    smoothie.home()
-    smoothie.simulating = False
-
-    def write_with_log(command, ack, connection, timeout, tag=None):
-        command_log.append(command.strip())
-        return opentrons.drivers.asyncio.smoothie.constants.SMOOTHIE_ACK
-
-    def _parse_position_response(arg):
-        return smoothie.position
-
-    monkeypatch.setattr(
-        serial_communication, 'write_and_return', write_with_log)
-    monkeypatch.setattr(
-        driver, '_parse_position_response', _parse_position_response)
-
-    smoothie.home()
-    expected = [
-        ['M907 A0.8 B0.05 C0.05 X0.3 Y0.3 Z0.8 G4 P0.005 G28.2.+[ABCZ].+'],
-        ['M400'],
-        ['M907 A0.1 B0.05 C0.05 X0.3 Y0.3 Z0.1 G4 P0.005'],
-        ['M400'],
-        ['M203.1 Y50'],
-        ['M400'],
-        ['M907 A0.1 B0.05 C0.05 X0.3 Y0.8 Z0.1 G4 P0.005 G91 G0 Y-28 G0 Y10 G90'],
-        ['M400'],
-        ['M203.1 X80'],
-        ['M400'],
-        ['M907 A0.1 B0.05 C0.05 X1.25 Y0.3 Z0.1 G4 P0.005 G28.2 X'],
-        ['M400'],
-        ['M203.1 A125 B40 C40 X600 Y400 Z125'],
-        ['M400'],
-        ['M907 A0.1 B0.05 C0.05 X0.3 Y0.3 Z0.1 G4 P0.005'],
-        ['M400'],
-        ['M203.1 Y80'],
-        ['M400'],
-        ['M907 A0.1 B0.05 C0.05 X0.3 Y1.25 Z0.1 G4 P0.005 G28.2 Y'],
-        ['M400'],
-        ['M203.1 Y8'],
-        ['M400'],
-        ['G91 G0 Y-3 G90'],
-        ['M400'],
-        ['G28.2 Y'],
-        ['M400'],
-        ['G91 G0 Y-3 G90'],
-        ['M400'],
-        ['M203.1 A125 B40 C40 X600 Y400 Z125'],
-        ['M400'],
-        ['M907 A0.1 B0.05 C0.05 X0.3 Y0.3 Z0.1 G4 P0.005'],
-        ['M400'],
-        ['M114.2'],
-        ['M400'],
-    ]
-    fuzzy_assert(result=command_log, expected=expected)
+async def test_plunger_commands(smoothie: driver.SmoothieDriver, mock_connection: AsyncMock):
     command_log = []
 
-    smoothie.move({'X': 0, 'Y': 1.123456, 'Z': 2, 'A': 3})
+    def write_with_log(command, retries=0):
+        command_log.append(command.build().strip())
+        v = ' '.join(f'{k}:{v}' for k, v in smoothie.position.items())
+        return f"{v} " + opentrons.drivers.asyncio.smoothie.constants.SMOOTHIE_ACK
+
+    mock_connection.send_command.side_effect = write_with_log
+
+    await smoothie.home()
     expected = [
-        ['M907 A0.8 B0.05 C0.05 X1.25 Y1.25 Z0.8 G4 P0.005 G0.+'],
-        ['M400'],
+        'M907 A0.8 B0.05 C0.05 X0.3 Y0.3 Z0.8 G4 P0.005 G28.2 ABCZ',
+        'M907 A0.1 B0.05 C0.05 X0.3 Y0.3 Z0.1 G4 P0.005',
+        'M203.1 Y50',
+        'M907 A0.1 B0.05 C0.05 X0.3 Y0.8 Z0.1 G4 P0.005 G91 G0 Y-28 G0 Y10 G90',
+        'M203.1 X80',
+        'M907 A0.1 B0.05 C0.05 X1.25 Y0.3 Z0.1 G4 P0.005 G28.2 X',
+        'M203.1 A125 B40 C40 X600 Y400 Z125',
+        'M907 A0.1 B0.05 C0.05 X0.3 Y0.3 Z0.1 G4 P0.005',
+        'M203.1 Y80',
+        'M907 A0.1 B0.05 C0.05 X0.3 Y1.25 Z0.1 G4 P0.005 G28.2 Y',
+        'M203.1 Y8',
+        'G91 G0 Y-3 G90',
+        'G28.2 Y',
+        'G91 G0 Y-3 G90',
+        'M203.1 A125 B40 C40 X600 Y400 Z125',
+        'M907 A0.1 B0.05 C0.05 X0.3 Y0.3 Z0.1 G4 P0.005',
+        'M114.2',
     ]
-    fuzzy_assert(result=command_log, expected=expected)
+    assert command_log == expected
+
     command_log = []
 
-    smoothie.move({'B': 2})
+    await smoothie.move({'X': 0, 'Y': 1.123456, 'Z': 2, 'A': 3})
     expected = [
-        ['M907 A0.1 B0.05 C0.05 X0.3 Y0.3 Z0.1 G4 P0.005 G0 B2'],
-        ['M400'],
-        ['M907 A0.1 B0.05 C0.05 X0.3 Y0.3 Z0.1 G4 P0.005'],
-        ['M400'],
+        'M907 A0.8 B0.05 C0.05 X0.3 Y1.25 Z0.8 G4 P0.005 G0 A3 Y1.123 Z2'
     ]
-    fuzzy_assert(result=command_log, expected=expected)
+
+    assert command_log == expected
+
     command_log = []
 
-    smoothie.move({
+    await smoothie.move({'B': 2})
+    expected = [
+        'M907 A0.1 B0.05 C0.05 X0.3 Y0.3 Z0.1 G4 P0.005 G0 B2.3 G0 B2',
+        'M907 A0.1 B0.05 C0.05 X0.3 Y0.3 Z0.1 G4 P0.005',
+    ]
+    assert command_log == expected
+
+    command_log = []
+
+    await smoothie.move({
         'X': 10.987654321,
         'Y': 2.12345678,
         'Z': 2.5,
@@ -262,20 +216,15 @@ def test_plunger_commands(smoothie, monkeypatch):
         'C': 5.55})
     expected = [
         # Set active axes high
-        ['M907 A0.8 B0.05 C0.05 X1.25 Y1.25 Z0.8 G4 P0.005 G0.+[BC].+'],
-        ['M400'],
+        'M907 A0.8 B0.05 C0.05 X1.25 Y1.25 Z0.8 G4 P0.005 G0 B4.55 C5.85 G0 A3.5 B4.25 C5.55 X10.988 Y2.123 Z2.5',
         # Set plunger current low
-        ['M907 A0.8 B0.05 C0.05 X1.25 Y1.25 Z0.8 G4 P0.005'],
-        ['M400'],
+        'M907 A0.8 B0.05 C0.05 X1.25 Y1.25 Z0.8 G4 P0.005',
     ]
-    fuzzy_assert(result=command_log, expected=expected)
+    assert command_log == expected
 
 
-def test_move_with_split(smoothie, monkeypatch):
+async def test_move_with_split(smoothie: driver.SmoothieDriver, mock_connection: AsyncMock):
     command_log = []
-    smoothie._setup()
-    smoothie.home()
-    smoothie.simulating = False
 
     smoothie.configure_splits_for(
         {
@@ -295,52 +244,34 @@ def test_move_with_split(smoothie, monkeypatch):
     )
     smoothie._steps_per_mm = {"B": 1.0, "C": 1.0}
 
-    def write_with_log(command, ack, connection, timeout, tag=None):
-        command_log.append(command.strip())
+    def write_with_log(command, retries=0):
+        command_log.append(command.build().strip())
         return opentrons.drivers.asyncio.smoothie.constants.SMOOTHIE_ACK
 
-    def _parse_position_response(arg):
-        return smoothie.position
+    mock_connection.send_command.side_effect = write_with_log
 
-    monkeypatch.setattr(
-        serial_communication, 'write_and_return', write_with_log)
-    monkeypatch.setattr(
-        driver, '_parse_position_response', _parse_position_response)
-
-    smoothie.move({'X': 0, 'Y': 1.123456, 'Z': 2, 'C': 3})
+    await smoothie.move({'X': 0, 'Y': 1.123456, 'Z': 2, 'C': 3})
     expected = [
-        ['M55 M92 C0.03125 G4 P0.01 G0 F60 M907 A0.1 B0.05 C1.75 X1.25 Y1.25 '
-         'Z0.8 G4 P0.005'],
-        ['M400'],
-        ['G0 C18.0'],
-        ['M400'],
-        ['M54 M92 C1.0 G4 P0.01'],
-        ['M400'],
-        ['G0 F24000 M907 A0.1 B0.05 C0.05 X1.25 Y1.25 Z0.8 G4 P0.005 G0.+'],
-        ['M400'],
-        ['M907 A0.1 B0.05 C0.05 X1.25 Y1.25 Z0.8 G4 P0.005'],
-        ['M400'],
+        'M55 M92 C0.03125 G4 P0.01 G0 F60 M907 A0.1 B0.05 C1.75 X0.3 Y1.25 Z0.8 G4 P0.005',
+        'G0 C1',
+        'M54 M92 C1.0 G4 P0.01',
+        'G0 F24000 M907 A0.1 B0.05 C0.05 X0.3 Y1.25 Z0.8 G4 P0.005 G0 C3.3 G0 C3 Y1.123 Z2',
+        'M907 A0.1 B0.05 C0.05 X0.3 Y1.25 Z0.8 G4 P0.005',
     ]
-    fuzzy_assert(result=command_log, expected=expected)
+    assert command_log == expected
+
     command_log = []
 
-    smoothie.move({'B': 2})
+    await smoothie.move({'B': 2})
 
     expected = [
-        ['M53 M92 B0.03125 G4 P0.01 G0 F60 M907 A0.1 B1.75 C0.05 '
-         'X0.3 Y0.3 Z0.1 G4 P0.005'],
-        ['M400'],
-        ['G0 B18.0'],
-        ['M400'],
-        ['M52 M92 B1.0 G4 P0.01'],
-        ['M400'],
-        ['M907 A0.1 B0.05 C0.05 X0.3 Y0.3 Z0.1 G4 P0.005 G0 B2'],
-        ['M400'],
-        ['M907 A0.1 B0.05 C0.05 X0.3 Y0.3 Z0.1 G4 P0.005'],
-        ['M400'],
+        'M53 M92 B0.03125 G4 P0.01 G0 F60 M907 A0.1 B1.75 C0.05 X0.3 Y0.3 Z0.1 G4 P0.005',
+        'G0 B1',
+        'M52 M92 B1.0 G4 P0.01',
+        'G0 F24000 M907 A0.1 B0.05 C0.05 X0.3 Y0.3 Z0.1 G4 P0.005 G0 B2.3 G0 B2',
+        'M907 A0.1 B0.05 C0.05 X0.3 Y0.3 Z0.1 G4 P0.005',
     ]
-    fuzzy_assert(result=command_log, expected=expected)
-    command_log = []
+    assert command_log == expected
 
 
 def test_set_active_current(smoothie, monkeypatch):
