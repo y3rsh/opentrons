@@ -67,8 +67,6 @@ async def test_update_position_retry(
         smoothie: driver.SmoothieDriver, mock_connection: AsyncMock
 ) -> None:
     """It should retry after a parse error."""
-    msg = 'ok MCS: X:0.0000 Y:MISTAKE Z:0.0000 A:0.0000 B:0.0000 C:0.0000'
-
     mock_connection.send_command.side_effect = [
         # first attempt to read, we get bad data
         'ok MCS: X:0.0000 Y:MISTAKE Z:0.0000 A:0.0000 B:0.0000 C:0.0000',
@@ -114,6 +112,8 @@ async def test_dwell_and_activate_axes(smoothie: driver.SmoothieDriver, mock_con
         return opentrons.drivers.asyncio.smoothie.constants.SMOOTHIE_ACK
 
     mock_connection.send_command.side_effect = write_with_log
+
+    await smoothie._setup()
 
     smoothie.activate_axes('X')
     await smoothie._set_saved_current()
@@ -274,51 +274,41 @@ async def test_move_with_split(smoothie: driver.SmoothieDriver, mock_connection:
     assert command_log == expected
 
 
-def test_set_active_current(smoothie, monkeypatch):
+async def test_set_active_current(
+        smoothie: driver.SmoothieDriver, mock_connection: AsyncMock
+):
     command_log = []
+
     smoothie._setup()
-    smoothie.home()
-    smoothie.simulating = False
 
-    def write_with_log(command, ack, connection, timeout, tag=None):
-        command_log.append(command.strip())
-        return opentrons.drivers.asyncio.smoothie.constants.SMOOTHIE_ACK
+    def write_with_log(command, *args, **kwargs):
+        command_log.append(command.build().strip())
+        v = ' '.join(f'{k}:{v}' for k, v in smoothie.position.items())
+        return f"{v} " + opentrons.drivers.asyncio.smoothie.constants.SMOOTHIE_ACK
 
-    def _parse_position_response(arg):
-        return smoothie.position
-
-    monkeypatch.setattr(serial_communication, 'write_and_return',
-                        write_with_log)
-    monkeypatch.setattr(
-        driver, '_parse_position_response', _parse_position_response)
+    mock_connection.send_command.side_effect = write_with_log
 
     smoothie.set_active_current(
         {'X': 2, 'Y': 2, 'Z': 2, 'A': 2, 'B': 2, 'C': 2})
     smoothie.set_dwelling_current(
         {'X': 0, 'Y': 0, 'Z': 0, 'A': 0, 'B': 0, 'C': 0})
 
-    smoothie.move({'X': 0, 'Y': 0, 'Z': 0, 'A': 0, 'B': 0, 'C': 0})
-    smoothie.move({'B': 1, 'C': 1})
+    await smoothie.move({'X': 0, 'Y': 0, 'Z': 0, 'A': 0, 'B': 0, 'C': 0})
+    await smoothie.move({'B': 1, 'C': 1})
     smoothie.set_active_current({'B': 0.42, 'C': 0.42})
-    smoothie.home('BC')
+    await smoothie.home('BC')
     expected = [
         # move all
-        ['M907 A2 B2 C2 X2 Y2 Z2 G4 P0.005 G0 A0 B0 C0 X0 Y0 Z0'],
-        ['M400'],
-        ['M907 A2 B0 C0 X2 Y2 Z2 G4 P0.005'],  # disable BC axes
-        ['M400'],
+        'M907 A2 B2 C2 X2 Y2 Z2 G4 P0.005 G0 A0 B0 C0 X0 Y0 Z0',
+        'M907 A2 B0 C0 X2 Y2 Z2 G4 P0.005',  # disable BC axes
         # move BC
-        ['M907 A0 B2 C2 X0 Y0 Z0 G4 P0.005 G0 B1.3 C1.3 G0 B1 C1'],
-        ['M400'],
-        ['M907 A0 B0 C0 X0 Y0 Z0 G4 P0.005'],  # disable BC axes
-        ['M400'],
-        ['M907 A0 B0.42 C0.42 X0 Y0 Z0 G4 P0.005 G28.2 BC'],  # home BC
-        ['M400'],
-        ['M907 A0 B0 C0 X0 Y0 Z0 G4 P0.005'],  # dwell all axes after home
-        ['M400'],
-        ['M114.2'],  # update the position
-        ['M400'],
+        'M907 A0 B2 C2 X0 Y0 Z0 G4 P0.005 G0 B1.3 C1.3 G0 B1 C1',
+        'M907 A0 B0 C0 X0 Y0 Z0 G4 P0.005',  # disable BC axes
+        'M907 A0 B0.42 C0.42 X0 Y0 Z0 G4 P0.005 G28.2 BC',  # home BC
+        'M907 A0 B0 C0 X0 Y0 Z0 G4 P0.005',  # dwell all axes after home
+        'M114.2',  # update the position
     ]
+    assert command_log == expected
     fuzzy_assert(result=command_log, expected=expected)
 
 

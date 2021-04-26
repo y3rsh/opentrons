@@ -516,7 +516,7 @@ class SmoothieDriver:
             gcode=GCODE.SET_SPEED
         ).add_int(prefix="F", value=int(float(speed) * SEC_PER_MIN))
 
-    async  def set_speed(self, value: Union[float, str], update: bool = True):
+    async def set_speed(self, value: Union[float, str], update: bool = True):
         """ set total axes movement speed in mm/second"""
         if update:
             self._combined_speed = float(value)
@@ -527,8 +527,8 @@ class SmoothieDriver:
     def push_speed(self):
         self._saved_axes_speed = float(self._combined_speed)
 
-    def pop_speed(self):
-        self.set_speed(self._saved_axes_speed)
+    async def pop_speed(self):
+        await self.set_speed(self._saved_axes_speed)
 
     @contextlib.contextmanager
     def restore_axis_max_speed(self, new_max_speeds: Dict[str, float]):
@@ -591,8 +591,8 @@ class SmoothieDriver:
     def push_acceleration(self):
         self._saved_acceleration = self._acceleration.copy()
 
-    def pop_acceleration(self):
-        self.set_acceleration(self._saved_acceleration)
+    async def pop_acceleration(self):
+        await self.set_acceleration(self._saved_acceleration)
 
     def set_active_current(self, settings: Dict[str, float]):
         """
@@ -1018,15 +1018,15 @@ class SmoothieDriver:
         try:
             await self._wait_for_ack()
         except NoResponse:
-            # incase motor-driver is stuck in bootloader and unresponsive,
+            # in case motor-driver is stuck in bootloader and unresponsive,
             # use gpio to reset into a ktimen state
             log.debug("wait for ack failed, resetting")
             self._smoothie_reset()
         log.debug("wait for ack done")
         await self._reset_from_error()
         log.debug("_reset")
-        self.update_steps_per_mm(self._config.gantry_steps_per_mm)
-        self.update_steps_per_mm({
+        await self.update_steps_per_mm(self._config.gantry_steps_per_mm)
+        await self.update_steps_per_mm({
             ax: self._config.default_pipette_configs['stepsPerMM']
             for ax in 'BC'})
         log.debug("sent steps")
@@ -1038,8 +1038,8 @@ class SmoothieDriver:
         log.debug("sent current")
         await self.update_position()
         await self.pop_axis_max_speed()
-        self.pop_speed()
-        self.pop_acceleration()
+        await self.pop_speed()
+        await self.pop_acceleration()
         log.debug("setup done")
 
     def _build_steps_per_mm(self, data: Dict[str, float]) -> CommandBuilder:
@@ -1056,17 +1056,17 @@ class SmoothieDriver:
             command.add_float(prefix=axis, value=value, precision=None)
         return command
 
-    def update_steps_per_mm(self, data: Union[Dict[str, float], str]):
+    async def update_steps_per_mm(self, data: Union[Dict[str, float], str]):
         # Using M92, update steps per mm for a given axis
         if isinstance(data, str):
             # Unfortunately update server calls driver._setup() before the
             # update can correctly load the robot_config change on disk.
             # Need to account for old command format to avoid this issue.
-            self._send_command(_command_builder().add_gcode(data))
+            await self._send_command(_command_builder().add_gcode(data))
         else:
             self.steps_per_mm.update(data)
             cmd = self._build_steps_per_mm(data)
-            self._send_command(cmd)
+            await self._send_command(cmd)
 
     async def _read_from_pipette(self, gcode: str, mount: str) -> Optional[str]:
         """
