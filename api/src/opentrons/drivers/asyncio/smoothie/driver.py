@@ -53,15 +53,6 @@ from opentrons.system import smoothie_update
 
 log = logging.getLogger(__name__)
 
-ERROR_KEYWORD = 'error'
-ALARM_KEYWORD = 'alarm'
-
-
-# Ignore these axis when sending move or home command
-
-# Number of digits after the decimal point for coordinates being sent
-# to Smoothie
-
 
 def _command_builder() -> CommandBuilder:
     """Create a CommandBuilder"""

@@ -86,6 +86,7 @@ HOME_SEQUENCE = ['ZABC', 'X', 'Y']
 AXES = ''.join(HOME_SEQUENCE)
 
 DISABLE_AXES = ''
+"""Ignore these axis when sending move or home command"""
 
 MOVEMENT_ERROR_MARGIN = 1/160  # Largest movement in mm for any step
 
@@ -117,3 +118,4 @@ MICROSTEPPING_GCODES = {
 }
 
 GCODE_ROUNDING_PRECISION = 3
+"""Number of digits after the decimal point for coordinates being sent to Smoothie"""
