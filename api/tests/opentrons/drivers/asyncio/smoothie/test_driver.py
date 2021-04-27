@@ -1,25 +1,58 @@
+import asyncio
 from copy import deepcopy
 
-import opentrons.drivers.asyncio.smoothie.constants
+from opentrons.drivers.asyncio.smoothie import constants
 import opentrons.drivers.asyncio.smoothie.parse_utils
 from mock import AsyncMock
 from unittest.mock import Mock
 import pytest
+from opentrons.drivers.asyncio.communication import SerialConnection
 from opentrons.drivers.asyncio.smoothie.command_sender import \
     SmoothieCommandSender
 from opentrons.drivers.rpi_drivers.gpio_simulator import SimulatingGPIOCharDev
 from opentrons.drivers.types import MoveSplit
+from opentrons.hardware_control.emulation.app import run_server
 
-from tests.opentrons.conftest import fuzzy_assert
 from opentrons.config.robot_configs import (
     DEFAULT_GANTRY_STEPS_PER_MM, DEFAULT_PIPETTE_CONFIGS)
 from opentrons.drivers.asyncio.smoothie import driver
+from opentrons.hardware_control.emulation.connection_handler import \
+    ConnectionHandler
+from opentrons.hardware_control.emulation.smoothie import SmoothieEmulator
 
 
 @pytest.fixture
-def mock_connection() -> AsyncMock:
+async def port() -> int:
+    return 5500
+
+
+@pytest.fixture()
+async def emulator(loop, port: int):
+    t = loop.create_task(
+        run_server(
+            host="127.0.0.1",
+            port=port,
+            handler=ConnectionHandler(SmoothieEmulator()))
+    )
+    yield t
+    t.cancel()
+    try:
+        await t
+    except asyncio.CancelledError:
+        pass
+
+
+@pytest.fixture
+async def mock_connection(emulator, port) -> SmoothieCommandSender:
     """The mock SerialConnection."""
-    return AsyncMock(spec=SmoothieCommandSender)
+    connection = await SerialConnection.create(
+        port=f"socket://127.0.0.1:{port}",
+        baud_rate=0,
+        name='smoothie',
+        timeout=constants.DEFAULT_EXECUTE_TIMEOUT,
+        ack=constants.SMOOTHIE_ACK
+    )
+    return SmoothieCommandSender(connection=connection)
 
 
 @pytest.fixture
@@ -45,13 +78,12 @@ def position(x, y, z, a, b, c):
     return {axis: value for axis, value in zip('XYZABC', [x, y, z, a, b, c])}
 
 
-async def test_update_position(smoothie: driver.SmoothieDriver, mock_connection: AsyncMock) -> None:
+async def test_update_position(smoothie: driver.SmoothieDriver,
+                               mock_connection: AsyncMock) -> None:
     """It should update the position."""
-    driver = smoothie
+    # mock_connection.send_command.return_value = 'ok MCS: X:1.0000 Y:2.0000 Z:3.0000 A:4.5000 B:0.0000 C:0.0000'
 
-    mock_connection.send_command.return_value = 'ok MCS: X:1.0000 Y:2.0000 Z:3.0000 A:4.5000 B:0.0000 C:0.0000'
-
-    await driver.update_position()
+    await smoothie.update_position()
     expected = {
         'X': 1,
         'Y': 2,
@@ -60,7 +92,7 @@ async def test_update_position(smoothie: driver.SmoothieDriver, mock_connection:
         'B': 0,
         'C': 0
     }
-    assert driver.position == expected
+    assert smoothie.position == expected
 
 
 async def test_update_position_retry(
@@ -86,84 +118,60 @@ async def test_update_position_retry(
     assert smoothie.position == expected
 
 
-def test_parse_position_response(smoothie):
-    # TODO move this outta here
-    good_data = 'ok M114.2 X:10 Y:20 Z:30 A:40 B:50 C:60'
-    bad_data = 'ok M114.2 X:10 Y:20: Z:30A:40 B:50 C:60'
-    res = opentrons.drivers.asyncio.smoothie.parse_utils._parse_position_response(good_data)
-    expected = {
-        'X': 10,
-        'Y': 20,
-        'Z': 30,
-        'A': 40,
-        'B': 50,
-        'C': 60,
-    }
-    assert res == expected
-    with pytest.raises(driver.ParseError):
-        opentrons.drivers.asyncio.smoothie.parse_utils._parse_position_response(bad_data)
+async def test_dwell_and_activate_axes(smoothie: driver.SmoothieDriver,
+                                       mock_connection: AsyncMock) -> None:
 
-
-async def test_dwell_and_activate_axes(smoothie: driver.SmoothieDriver, mock_connection: AsyncMock) -> None:
-    command_log = []
-
-    async def write_with_log(command, retries=0):
-        command_log.append(command.build().strip())
-        return opentrons.drivers.asyncio.smoothie.constants.SMOOTHIE_ACK
-
-    mock_connection.send_command.side_effect = write_with_log
-
-    await smoothie._setup()
+    # Attach a spy
+    mock_connection.send_command = AsyncMock(wraps=mock_connection.send_command)
 
     smoothie.activate_axes('X')
     await smoothie._set_saved_current()
+    assert str(mock_connection.send_command.call_args.kwargs['command']).strip() \
+           == 'M907 A0.1 B0.05 C0.05 X1.25 Y0.3 Z0.1 G4 P0.005'
+
     smoothie.dwell_axes('X')
     await smoothie._set_saved_current()
+    assert str(mock_connection.send_command.call_args.kwargs['command']).strip() \
+           == 'M907 A0.1 B0.05 C0.05 X0.3 Y0.3 Z0.1 G4 P0.005'
+
     smoothie.activate_axes('XYBC')
     await smoothie._set_saved_current()
+    assert str(mock_connection.send_command.call_args.kwargs['command']).strip() \
+           == 'M907 A0.1 B0.05 C0.05 X1.25 Y1.25 Z0.1 G4 P0.005'
+
     smoothie.dwell_axes('XC')
     await smoothie._set_saved_current()
+    assert str(mock_connection.send_command.call_args.kwargs['command']).strip() \
+           == 'M907 A0.1 B0.05 C0.05 X0.3 Y1.25 Z0.1 G4 P0.005'
+
     smoothie.dwell_axes('BCY')
     await smoothie._set_saved_current()
-    expected = [
-        'M907 A0.1 B0.05 C0.05 X1.25 Y0.3 Z0.1 G4 P0.005',
-        'M907 A0.1 B0.05 C0.05 X0.3 Y0.3 Z0.1 G4 P0.005',
-        'M907 A0.1 B0.05 C0.05 X1.25 Y1.25 Z0.1 G4 P0.005',
-        'M907 A0.1 B0.05 C0.05 X0.3 Y1.25 Z0.1 G4 P0.005',
-        'M907 A0.1 B0.05 C0.05 X0.3 Y0.3 Z0.1 G4 P0.005',
-    ]
-    assert command_log == expected
+    assert str(mock_connection.send_command.call_args.kwargs['command']).strip() \
+           == 'M907 A0.1 B0.05 C0.05 X0.3 Y0.3 Z0.1 G4 P0.005'
 
 
-async def test_disable_motor(smoothie: driver.SmoothieDriver, mock_connection: AsyncMock):
-    command_log = []
-
-    def write_with_log(command, retries=0):
-        command_log.append(command.build().strip())
-        return opentrons.drivers.asyncio.smoothie.constants.SMOOTHIE_ACK
-
-    mock_connection.send_command.side_effect = write_with_log
+async def test_disable_motor(smoothie: driver.SmoothieDriver,
+                             mock_connection: AsyncMock):
+    # Attach a spy
+    mock_connection.send_command = AsyncMock(wraps=mock_connection.send_command)
 
     await smoothie.disengage_axis('X')
+    assert str(mock_connection.send_command.call_args.kwargs['command']).strip() \
+           == 'M18 X'
+
     await smoothie.disengage_axis('XYZ')
+    assert str(mock_connection.send_command.call_args.kwargs['command']).strip() \
+           == 'M18 XYZ'
+
     await smoothie.disengage_axis('ABCD')
-    expected = [
-        'M18 X',
-        'M18 XYZ',
-        'M18 ABC',
-    ]
-    assert command_log == expected
+    assert str(mock_connection.send_command.call_args.kwargs['command']).strip() \
+           == 'M18 ABC'
 
 
-async def test_plunger_commands(smoothie: driver.SmoothieDriver, mock_connection: AsyncMock):
-    command_log = []
-
-    def write_with_log(command, retries=0):
-        command_log.append(command.build().strip())
-        v = ' '.join(f'{k}:{v}' for k, v in smoothie.position.items())
-        return f"{v} " + opentrons.drivers.asyncio.smoothie.constants.SMOOTHIE_ACK
-
-    mock_connection.send_command.side_effect = write_with_log
+async def test_plunger_commands(smoothie: driver.SmoothieDriver,
+                                mock_connection: AsyncMock):
+    # Attach a spy
+    mock_connection.send_command = AsyncMock(wraps=mock_connection.send_command)
 
     await smoothie.home()
     expected = [
@@ -185,27 +193,31 @@ async def test_plunger_commands(smoothie: driver.SmoothieDriver, mock_connection
         'M907 A0.1 B0.05 C0.05 X0.3 Y0.3 Z0.1 G4 P0.005',
         'M114.2',
     ]
-    assert command_log == expected
+    assert len(expected) == mock_connection.send_command.call_count
+    for i in range(len(expected)):
+        assert str(mock_connection.send_command.call_args_list[i].kwargs['command']).strip() \
+           == expected[i]
 
-    command_log = []
+    mock_connection.send_command.reset_mock()
 
     await smoothie.move({'X': 0, 'Y': 1.123456, 'Z': 2, 'A': 3})
-    expected = [
-        'M907 A0.8 B0.05 C0.05 X0.3 Y1.25 Z0.8 G4 P0.005 G0 A3 Y1.123 Z2'
-    ]
+    assert str(
+        mock_connection.send_command.call_args.kwargs['command']
+    ).strip() == 'M907 A0.8 B0.05 C0.05 X0.3 Y1.25 Z0.8 G4 P0.005 G0 A3 Y1.123 Z2'
 
-    assert command_log == expected
-
-    command_log = []
+    mock_connection.send_command.reset_mock()
 
     await smoothie.move({'B': 2})
     expected = [
         'M907 A0.1 B0.05 C0.05 X0.3 Y0.3 Z0.1 G4 P0.005 G0 B2.3 G0 B2',
-        'M907 A0.1 B0.05 C0.05 X0.3 Y0.3 Z0.1 G4 P0.005',
+        'M907 A0.1 B0.05 C0.05 X0.3 Y0.3 Z0.1 G4 P0.005'
     ]
-    assert command_log == expected
+    for i in range(len(expected)):
+        assert str(mock_connection.send_command.call_args_list[i].kwargs[
+                       'command']).strip() \
+               == expected[i]
 
-    command_log = []
+    mock_connection.send_command.reset_mock()
 
     await smoothie.move({
         'X': 10.987654321,
@@ -215,16 +227,19 @@ async def test_plunger_commands(smoothie: driver.SmoothieDriver, mock_connection
         'B': 4.25,
         'C': 5.55})
     expected = [
-        # Set active axes high
         'M907 A0.8 B0.05 C0.05 X1.25 Y1.25 Z0.8 G4 P0.005 G0 B4.55 C5.85 G0 A3.5 B4.25 C5.55 X10.988 Y2.123 Z2.5',
-        # Set plunger current low
-        'M907 A0.8 B0.05 C0.05 X1.25 Y1.25 Z0.8 G4 P0.005',
+        'M907 A0.8 B0.05 C0.05 X1.25 Y1.25 Z0.8 G4 P0.005'
     ]
-    assert command_log == expected
+
+    for i in range(len(expected)):
+        assert str(mock_connection.send_command.call_args_list[i].kwargs[
+                       'command']).strip() \
+               == expected[i]
 
 
-async def test_move_with_split(smoothie: driver.SmoothieDriver, mock_connection: AsyncMock):
-    command_log = []
+async def test_move_with_split(
+        smoothie: driver.SmoothieDriver,
+        mock_connection: AsyncMock):
 
     smoothie.configure_splits_for(
         {
@@ -244,42 +259,44 @@ async def test_move_with_split(smoothie: driver.SmoothieDriver, mock_connection:
     )
     smoothie._steps_per_mm = {"B": 1.0, "C": 1.0}
 
-    def write_with_log(command, retries=0):
-        command_log.append(command.build().strip())
-        return opentrons.drivers.asyncio.smoothie.constants.SMOOTHIE_ACK
-
-    mock_connection.send_command.side_effect = write_with_log
+    # Attach a spy
+    mock_connection.send_command = AsyncMock(wraps=mock_connection.send_command)
 
     await smoothie.move({'X': 0, 'Y': 1.123456, 'Z': 2, 'C': 3})
     expected = [
         'M55 M92 C0.03125 G4 P0.01 G0 F60 M907 A0.1 B0.05 C1.75 X0.3 Y1.25 Z0.8 G4 P0.005',
         'G0 C1',
         'M54 M92 C1.0 G4 P0.01',
-        'G0 F24000 M907 A0.1 B0.05 C0.05 X0.3 Y1.25 Z0.8 G4 P0.005 G0 C3.3 G0 C3 Y1.123 Z2',
-        'M907 A0.1 B0.05 C0.05 X0.3 Y1.25 Z0.8 G4 P0.005',
+        'G0 F24000 M907 A0.1 B0.05 C0.05 X1.25 Y1.25 Z0.8 G4 P0.005 G0 C3 X0 Y1.123 Z2',
+        'M907 A0.1 B0.05 C0.05 X1.25 Y1.25 Z0.8 G4 P0.005'
     ]
-    assert command_log == expected
+    for i in range(len(expected)):
+        assert str(mock_connection.send_command.call_args_list[i].kwargs[
+                       'command']).strip() \
+               == expected[i]
 
-    command_log = []
+    mock_connection.send_command.reset_mock()
 
     await smoothie.move({'B': 2})
 
     expected = [
         'M53 M92 B0.03125 G4 P0.01 G0 F60 M907 A0.1 B1.75 C0.05 X0.3 Y0.3 Z0.1 G4 P0.005',
-        'G0 B1',
+        'G0 B18.0',
         'M52 M92 B1.0 G4 P0.01',
-        'G0 F24000 M907 A0.1 B0.05 C0.05 X0.3 Y0.3 Z0.1 G4 P0.005 G0 B2.3 G0 B2',
+        'G0 F24000 M907 A0.1 B0.05 C0.05 X0.3 Y0.3 Z0.1 G4 P0.005 G0 B2',
         'M907 A0.1 B0.05 C0.05 X0.3 Y0.3 Z0.1 G4 P0.005',
     ]
-    assert command_log == expected
+    for i in range(len(expected)):
+        assert str(mock_connection.send_command.call_args_list[i].kwargs[
+                       'command']).strip() \
+               == expected[i]
+
 
 
 async def test_set_active_current(
         smoothie: driver.SmoothieDriver, mock_connection: AsyncMock
 ):
     command_log = []
-
-    smoothie._setup()
 
     def write_with_log(command, *args, **kwargs):
         command_log.append(command.build().strip())
@@ -298,31 +315,28 @@ async def test_set_active_current(
     smoothie.set_active_current({'B': 0.42, 'C': 0.42})
     await smoothie.home('BC')
     expected = [
-        # move all
         'M907 A2 B2 C2 X2 Y2 Z2 G4 P0.005 G0 A0 B0 C0 X0 Y0 Z0',
         'M907 A2 B0 C0 X2 Y2 Z2 G4 P0.005',  # disable BC axes
-        # move BC
         'M907 A0 B2 C2 X0 Y0 Z0 G4 P0.005 G0 B1.3 C1.3 G0 B1 C1',
         'M907 A0 B0 C0 X0 Y0 Z0 G4 P0.005',  # disable BC axes
         'M907 A0 B0.42 C0.42 X0 Y0 Z0 G4 P0.005 G28.2 BC',  # home BC
-        'M907 A0 B0 C0 X0 Y0 Z0 G4 P0.005',  # dwell all axes after home
+        'M907 A0 B0 C0 X0 Y0 Z0 G4 P0.005',   # dwell all axes after home
         'M114.2',  # update the position
     ]
     assert command_log == expected
-    fuzzy_assert(result=command_log, expected=expected)
 
 
-def test_steps_per_mm(smoothie, monkeypatch):
+async def test_steps_per_mm(smoothie: driver.SmoothieDriver):
     # Check that steps_per_mm dict gets loaded with defaults on start
     assert smoothie.steps_per_mm == {}
-    smoothie._setup()
+    await smoothie._setup()
     expected = {
         **DEFAULT_GANTRY_STEPS_PER_MM,
         'B': DEFAULT_PIPETTE_CONFIGS['stepsPerMM'],
         'C': DEFAULT_PIPETTE_CONFIGS['stepsPerMM'],
     }
     assert smoothie.steps_per_mm == expected
-    smoothie.update_steps_per_mm({'Z': 450})
+    await smoothie.update_steps_per_mm({'Z': 450})
     expected['Z'] = 450
     assert smoothie.steps_per_mm == expected
 
@@ -363,21 +377,17 @@ def test_set_acceleration(smoothie, monkeypatch):
     smoothie.pop_acceleration()
 
     expected = [
-        ['M204 S10000 A4 B5 C6 X1 Y2 Z3'],
-        ['M400'],
-        ['M204 S10000 A4 B5 C6 X1 Y2 Z3'],
-        ['M400'],
-        ['M204 S10000 A40 B50 C60 X10 Y20 Z30'],
-        ['M400'],
-        ['M204 S10000 A4 B5 C6 X1 Y2 Z3'],
-        ['M400'],
+        'M204 S10000 A4 B5 C6 X1 Y2 Z3',
+        'M204 S10000 A4 B5 C6 X1 Y2 Z3'
+        'M204 S10000 A40 B50 C60 X10 Y20 Z30',
+        'M204 S10000 A4 B5 C6 X1 Y2 Z3'
     ]
-    fuzzy_assert(result=command_log, expected=expected)
+    assert command_log == expected
 
 
 def test_active_dwelling_current_push_pop(smoothie):
     assert smoothie._active_current_settings != \
-        smoothie._dwelling_current_settings
+           smoothie._dwelling_current_settings
 
     old_active_currents = deepcopy(smoothie._active_current_settings)
     old_dwelling_currents = deepcopy(smoothie._dwelling_current_settings)
@@ -414,8 +424,10 @@ def test_parse_pipette_data():
     msg = 'TestsRule!!'
     mount = 'L'
     good_data = mount + ': ' \
-                + opentrons.drivers.asyncio.smoothie.parse_utils._byte_array_to_hex_string(msg.encode())
-    parsed = opentrons.drivers.asyncio.smoothie.parse_utils._parse_instrument_data(good_data).get(mount)
+                + opentrons.drivers.asyncio.smoothie.parse_utils._byte_array_to_hex_string(
+        msg.encode())
+    parsed = opentrons.drivers.asyncio.smoothie.parse_utils._parse_instrument_data(
+        good_data).get(mount)
     assert parsed.decode() == msg
 
 
@@ -463,7 +475,8 @@ def test_read_pipette_v13(smoothie, monkeypatch):
 
     def _new_send_message(
             command, timeout=None, suppress_error_msg=True):
-        return 'L:' + opentrons.drivers.asyncio.smoothie.parse_utils._byte_array_to_hex_string(b'p300_single_v13')
+        return 'L:' + opentrons.drivers.asyncio.smoothie.parse_utils._byte_array_to_hex_string(
+            b'p300_single_v13')
 
     monkeypatch.setattr(driver, '_send_command', _new_send_message)
 

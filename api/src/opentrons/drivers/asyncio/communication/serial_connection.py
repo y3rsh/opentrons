@@ -85,6 +85,7 @@ class SerialConnection:
         log.debug(f'{self.name}: Read <- {response!r}')
 
         if self._ack in response:
+            response = response.replace(self._ack, b'')
             str_response = response.decode()
             self.raise_on_error(response=str_response)
             return str_response
