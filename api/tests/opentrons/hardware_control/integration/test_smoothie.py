@@ -384,143 +384,29 @@ def test_homing_flags(smoothie: driver_3_0.SmoothieDriver_3_0_0, spy: MagicMock)
     }
 
 
-def test_switch_state(smoothie, monkeypatch):
-    driver = smoothie
-
-    def send_mock(target):
-        smoothie_switch_res = 'X_max:0 Y_max:0 Z_max:0 A_max:0 B_max:0 C_max:0'
-        smoothie_switch_res += ' _pins '
-        smoothie_switch_res += '(XL)2.01:0 (YL)2.01:0 (ZL)2.01:0 '
-        smoothie_switch_res += '(AL)2.01:0 (BL)2.01:0 (CL)2.01:0 Probe: 0\r\n'
-        return smoothie_switch_res
-
-    monkeypatch.setattr(driver, '_send_command', send_mock)
-
-    expected = {
-        'X': False,
-        'Y': False,
-        'Z': False,
-        'A': False,
-        'B': False,
-        'C': False,
-        'Probe': False
-    }
-    assert driver.switch_state == expected
-
-    def send_mock(target):
-        smoothie_switch_res = 'X_max:0 Y_max:0 Z_max:0 A_max:1 B_max:0 C_max:0'
-        smoothie_switch_res += ' _pins '
-        smoothie_switch_res += '(XL)2.01:0 (YL)2.01:0 (ZL)2.01:0 '
-        smoothie_switch_res += '(AL)2.01:0 (BL)2.01:0 (CL)2.01:0 Probe: 1\r\n'
-        return smoothie_switch_res
-
-    monkeypatch.setattr(driver, '_send_command', send_mock)
-
-    expected = {
-        'X': False,
-        'Y': False,
-        'Z': False,
-        'A': True,
-        'B': False,
-        'C': False,
-        'Probe': True
-    }
-    assert driver.switch_state == expected
-
-
-def test_clear_limit_switch(smoothie, monkeypatch):
-    """
-    This functions as a contract test around recovery from a limit-switch hit.
-    Note that this *does not* itself guarantee correct physical behavior--this
-    interaction has been designed and tested on the robot manually and then
-    encoded in this test. If requirements change around physical behavior, then
-    this test will need to be revised.
-    """
-    driver = smoothie
-    driver.home('xyza')
-    cmd_list = []
-
-    def write_mock(command, ack, serial_connection, timeout, tag=None):
-        nonlocal cmd_list
-        cmd_list.append(command)
-        if driver_3_0.GCODE.MOVE in command:
-            return "ALARM: Hard limit +C"
-        elif driver_3_0.GCODE.CURRENT_POSITION in command:
-            return 'ok M114.2 X:10 Y:20 Z:30 A:40 B:50 C:60'
-        else:
-            return "ok"
-
-    monkeypatch.setattr(serial_communication, 'write_and_return', write_mock)
-
-    driver.simulating = False
-    # This will cause a limit-switch error and not back off
-    with pytest.raises(driver_3_0.SmoothieError):
-        driver.move({'C': 100})
-
-    assert [c.strip() for c in cmd_list] == [
-        # attempt to move and fail
-        'M907 A0.1 B0.05 C0.05 X0.3 Y0.3 Z0.1 G4 P0.005 G0 C100.3 G0 C100',
-        # recover from failure
-        'M999',
-        'M400',
-        # set current for homing the failed axis (C)
-        'M907 A0.1 B0.05 C0.05 X0.3 Y0.3 Z0.1 G4 P0.005 G28.2 C',
-        'M400',
-        # set current back to idling after home
-        'M907 A0.1 B0.05 C0.05 X0.3 Y0.3 Z0.1 G4 P0.005',
-        'M400',
-        # update position
-        'M114.2',
-        'M400',
-        'M907 A0.1 B0.05 C0.05 X0.3 Y0.3 Z0.1 G4 P0.005',
-        'M400',
-    ]
-
-
-def test_update_pipette_config(smoothie, monkeypatch):
-    driver = smoothie
-    cmd_list = []
-
-    def _send_command_mock(command):
-        nonlocal cmd_list
-        cmd_list.append(command)
-        return "ok"
-
-    monkeypatch.setattr(driver, '_send_command', _send_command_mock)
-
-    driver.simulating = False
-
-    driver.update_pipette_config("X", {
+def test_update_pipette_config(smoothie: driver_3_0.SmoothieDriver_3_0_0, spy: MagicMock):
+    smoothie.update_pipette_config("X", {
         'retract': 2,
         'debounce': 3,
         'max_travel': 4,
         'home': 5
     })
-
-    assert [c.build().strip() for c in cmd_list] == [
+    command_log = [x[0][0].strip() for x in spy.call_args_list]
+    assert command_log == [
         "M365.3 X2",
+        "M400",
         "M365.2 O3",
+        "M400",
         "M365.1 X4",
-        "M365.0 X5"
+        "M400",
+        "M365.0 X5",
+        "M400",
     ]
 
 
-def test_do_relative_splits_during_home_for(smoothie, monkeypatch):
+def test_do_relative_splits_during_home_for(smoothie: driver_3_0.SmoothieDriver_3_0_0, spy: MagicMock):
     """Test command structure when a split configuration is present."""
-    driver = smoothie
-    cmd_list = []
-
-    def _send_command_mock(
-            command, *args, **kwargs):
-        nonlocal cmd_list
-        cmd_list.append(command.build())
-        return "ok"
-
-    monkeypatch.setattr(driver, '_send_command', _send_command_mock)
-
-    driver.simulating = False
-
-    driver.configure_splits_for(
+    smoothie.configure_splits_for(
         {
             "B": MoveSplit(
                 split_distance=1,
@@ -530,13 +416,16 @@ def test_do_relative_splits_during_home_for(smoothie, monkeypatch):
                 fullstep=True)
         }
     )
-    driver._steps_per_mm = {"B": 1.0, "C": 1.0}
+    smoothie._steps_per_mm = {"B": 1.0, "C": 1.0}
 
-    driver._do_relative_splits_during_home_for("BC")
+    smoothie._do_relative_splits_during_home_for("BC")
 
-    assert cmd_list == [
-        'M53 M55 M92 B0.03125 C0.03125 G4 P0.01 M907 B1.75 G4 P0.005 G0 F60 '
-        'G91 \r\n\r\n',
-        'G0 B-1 \r\n\r\n',
-        'G90 M52 M54 M92 B1.0 C1.0 G4 P0.01 G0 F24000 \r\n\r\n'
+    command_log = [x[0][0].strip() for x in spy.call_args_list]
+    assert command_log == [
+        'M53 M55 M92 B0.03125 C0.03125 G4 P0.01 M907 B1.75 G4 P0.005 G0 F60 G91',
+        'M400',
+        'G0 B-1',
+        'M400',
+        'G90 M52 M54 M92 B1.0 C1.0 G4 P0.01 G0 F24000',
+        'M400',
     ]
