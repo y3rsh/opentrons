@@ -17,7 +17,7 @@ class SmoothieEmulator(AbstractEmulator):
     """Smoothie emulator"""
 
     def __init__(self) -> None:
-        self._pos = HOMED_POSITION.copy()
+        self._pos = {'A': 0, 'B': 0, 'C': 0, 'X': 0, 'Y': 0, 'Z': 0}
         self._home_status = {
             'X': 0,
             'Y': 0,
@@ -49,6 +49,7 @@ class SmoothieEmulator(AbstractEmulator):
 
     def _handle(self, command: Command) -> Optional[str]:
         """Handle a command."""
+        # TODO (al, 2021-04-28): break this up into multiple functions.
         logger.info(f"Got command {command}")
         if GCODE.HOMING_STATUS == command.gcode:
             vals = " ".join(f"{k}:{v}" for k, v in self._home_status.items())
@@ -81,8 +82,8 @@ class SmoothieEmulator(AbstractEmulator):
                 self._home_status[axis] = 0
             self._pos.update(command.params)
         elif GCODE.HOME == command.gcode:
-            self._pos = HOMED_POSITION.copy()
             for axis in command.params.keys():
+                self._pos[axis] = HOMED_POSITION[axis]
                 self._home_status[axis] = 1
         return None
 

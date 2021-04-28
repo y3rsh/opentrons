@@ -30,13 +30,6 @@ def test_get_attached_instruments(smoothie: Controller):
     assert instruments[Mount.LEFT]['config'].name == "p20_multi_gen2"
 
 
-def test_update_position(smoothie: Controller):
-    """It should update the door position."""
-    new_position = smoothie.update_position()
-
-    assert new_position == HOMED_POSITION
-
-
 def test_move(smoothie: Controller):
     """It should move."""
     new_position = {

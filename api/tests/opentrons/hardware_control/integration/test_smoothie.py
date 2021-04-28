@@ -329,11 +329,6 @@ def test_read_and_write_pipettes(smoothie: driver_3_0.SmoothieDriver_3_0_0, spy:
     assert read_model == test_model + '_v1'
 
 
-def test_read_pipette(smoothie: driver_3_0.SmoothieDriver_3_0_0, spy: MagicMock):
-    res = smoothie.read_pipette_model('left')
-    assert res == 'p20_multi_v2.0'
-
-
 def test_fast_home(smoothie: driver_3_0.SmoothieDriver_3_0_0, spy: MagicMock):
     smoothie.home()
     spy.reset_mock()
@@ -362,6 +357,14 @@ def test_fast_home(smoothie: driver_3_0.SmoothieDriver_3_0_0, spy: MagicMock):
 
 
 def test_homing_flags(smoothie: driver_3_0.SmoothieDriver_3_0_0, spy: MagicMock):
+    smoothie.move(target={
+        'X': 0,
+        'Y': 0,
+        'Z': 0,
+        'A': 0,
+        'B': 0,
+        'C': 0
+    })
     smoothie.update_homed_flags()
     assert smoothie.homed_flags == {
         'X': False,
@@ -372,11 +375,11 @@ def test_homing_flags(smoothie: driver_3_0.SmoothieDriver_3_0_0, spy: MagicMock)
         'C': False
     }
 
-    smoothie.home()
+    smoothie.home("abcZ")
     smoothie.update_homed_flags()
     assert smoothie.homed_flags == {
-        'X': True,
-        'Y': True,
+        'X': False,
+        'Y': False,
         'Z': True,
         'A': True,
         'B': True,
