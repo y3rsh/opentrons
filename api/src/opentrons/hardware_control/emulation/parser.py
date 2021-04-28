@@ -1,12 +1,12 @@
 import re
 from dataclasses import dataclass
-from typing import Sequence, Dict, Generator, Optional
+from typing import Sequence, Dict, Generator, Optional, Union
 
 
 @dataclass
 class Command:
     gcode: str
-    params: Dict[str, Optional[float]]
+    params: Dict[str, Optional[Union[float, str]]]
 
 
 class Parser:

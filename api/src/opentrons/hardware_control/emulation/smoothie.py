@@ -1,4 +1,5 @@
 import logging
+import re
 from typing import Optional
 
 from opentrons.drivers.smoothie_drivers import HOMED_POSITION
@@ -38,7 +39,7 @@ class SmoothieEmulator(AbstractEmulator):
             # P20SV202020070101
             "R": "5032305356323032303230303730313031000000000000000000000000000000"
         }
-        self._parser = Parser(gcodes=list(GCODE))
+        self._parser = SmoothieParser(gcodes=list(GCODE))
 
     def handle(self, line: str) -> Optional[str]:
         """Handle a line"""
@@ -68,15 +69,11 @@ class SmoothieEmulator(AbstractEmulator):
             elif "R" in command.params:
                 return f"R:{self._pipette_model['R']}"
         elif GCODE.WRITE_INSTRUMENT_ID == command.gcode:
-            pass
-            # print("AM", command.params)
-            # t = sorted(command.params.keys(), key=lambda x: len(x))
-            # self._pipette_id.update({t[0]: t[1]})
+            assert 'L' in command.params or 'R' in command.params, "Missing mount"
+            self._pipette_id.update(command.params)
         elif GCODE.WRITE_INSTRUMENT_MODEL == command.gcode:
-            pass
-            # print("AAM", command.params)
-            # t = sorted(command.params.keys(), key=lambda x: len(x))
-            # self._pipette_model.update({t[0]: t[1]})
+            assert 'L' in command.params or 'R' in command.params, "Missing mount"
+            self._pipette_model.update(command.params)
         elif GCODE.MOVE == command.gcode:
             if 'F' in command.params:
                 self._speed = command.params.pop('F')
@@ -89,3 +86,17 @@ class SmoothieEmulator(AbstractEmulator):
                 self._home_status[axis] = 1
         return None
 
+
+class SmoothieParser(Parser):
+    """Override Parser for special handling of some Smoothie gcodes."""
+
+    WRITE_INSTRUMENT_RE = re.compile(r"(?P<mount>[LR])\s*(?P<value>[a-f0-9]+)")
+
+    @staticmethod
+    def _build_args(gcode: str, body: str) -> Command:
+        """Override to handle irregular gcode params."""
+        if gcode == GCODE.WRITE_INSTRUMENT_MODEL or gcode == GCODE.WRITE_INSTRUMENT_ID:
+            pars = (i.groupdict() for i in SmoothieParser.WRITE_INSTRUMENT_RE.finditer(body))
+            return Command(gcode=gcode, params={p['mount']: p['value'] for p in pars})
+
+        return Parser._build_args(gcode=gcode, body=body)
