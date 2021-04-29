@@ -23,9 +23,9 @@ from opentrons.drivers.asyncio.smoothie.constants import GCODE, HOMED_POSITION, 
 from opentrons.drivers.asyncio.smoothie.errors import SmoothieError, \
     SmoothieAlarm, TipProbeError
 from opentrons.drivers.asyncio.smoothie.parse_utils import \
-    _parse_position_response, _parse_instrument_data, \
-    _byte_array_to_ascii_string, _byte_array_to_hex_string, \
-    _parse_switch_values, _parse_homing_status_values
+    parse_position_response, parse_instrument_data, \
+    byte_array_to_ascii_string, byte_array_to_hex_string, \
+    parse_switch_values, parse_homing_status_values
 from opentrons.drivers.command_builder import CommandBuilder
 from opentrons.drivers.serial_communication import get_ports_by_name
 from serial.serialutil import SerialException  # type: ignore
@@ -226,7 +226,7 @@ class SmoothieDriver:
                 position_response = await self._send_command(
                     _command_builder().add_gcode(gcode=GCODE.CURRENT_POSITION)
                 )
-                return _parse_position_response(position_response)
+                return parse_position_response(position_response)
             except ParseError as e:
                 retries -= 1
                 if retries <= 0:
@@ -451,7 +451,7 @@ class SmoothieDriver:
         res = await self._send_command(_command_builder().add_gcode(
             gcode=GCODE.LIMIT_SWITCH_STATUS
         ))
-        return _parse_switch_values(res)
+        return parse_switch_values(res)
 
     async def update_homed_flags(
             self, flags: Dict[str, bool] = None):
@@ -471,7 +471,7 @@ class SmoothieDriver:
                 try:
                     res = await self._send_command(
                         _command_builder().add_gcode(gcode=GCODE.HOMING_STATUS))
-                    flags = _parse_homing_status_values(res)
+                    flags = parse_homing_status_values(res)
                     self.homed_flags.update(flags)
                 except ParseError as e:
                     retries -= 1
@@ -1087,11 +1087,11 @@ class SmoothieDriver:
                 _command_builder().add_gcode(gcode=gcode).add_element(allowed_mount),
                 suppress_error_msg=True)
             if res:
-                res = _parse_instrument_data(res)
+                res = parse_instrument_data(res)
                 assert allowed_mount in res
                 # data is read/written as strings of HEX characters
                 # to avoid firmware weirdness in how it parses GCode arguments
-                return _byte_array_to_ascii_string(res[allowed_mount])
+                return byte_array_to_ascii_string(res[allowed_mount])
         except (ParseError, AssertionError, SmoothieError):
             pass
         return None
@@ -1125,7 +1125,7 @@ class SmoothieDriver:
         await self.delay(CURRENT_CHANGE_DELAY)
         # data is read/written as strings of HEX characters
         # to avoid firmware weirdness in how it parses GCode arguments
-        byte_string = _byte_array_to_hex_string(
+        byte_string = byte_array_to_hex_string(
             bytearray(data_string.encode()))
         command = _command_builder().add_gcode(
             gcode=gcode

@@ -10,7 +10,7 @@ from opentrons.drivers.utils import parse_key_values, parse_number, \
 log = logging.getLogger(__name__)
 
 
-def _parse_position_response(raw_axis_values: str) -> Dict[str, float]:
+def parse_position_response(raw_axis_values: str) -> Dict[str, float]:
     """
     Parse position response.
 
@@ -33,7 +33,7 @@ def _parse_position_response(raw_axis_values: str) -> Dict[str, float]:
     return data
 
 
-def _parse_instrument_data(smoothie_response: str) -> Dict[str, bytearray]:
+def parse_instrument_data(smoothie_response: str) -> Dict[str, bytearray]:
     """
     Parse instrument data.
 
@@ -47,6 +47,8 @@ def _parse_instrument_data(smoothie_response: str) -> Dict[str, bytearray]:
     try:
         items = smoothie_response.split('\n')[0].strip().split(':')
         mount = items[0]
+        if mount not in {'L', 'R'}:
+            raise ParseError(f"'{mount}' is not a valid mount.")
         # data received from Smoothieware is stringified HEX values
         # because of how Smoothieware handles GCODE messages
         data = bytearray.fromhex(items[1])
@@ -57,7 +59,7 @@ def _parse_instrument_data(smoothie_response: str) -> Dict[str, bytearray]:
     return {mount: data}
 
 
-def _byte_array_to_ascii_string(byte_array: bytearray) -> str:
+def byte_array_to_ascii_string(byte_array: bytearray) -> str:
     """
     Convert byte array to ascii string.
 
@@ -82,7 +84,7 @@ def _byte_array_to_ascii_string(byte_array: bytearray) -> str:
     return res
 
 
-def _byte_array_to_hex_string(byte_array):
+def byte_array_to_hex_string(byte_array):
     # data must be sent as stringified HEX values
     # because of how Smoothieware parses GCODE messages
     try:
@@ -95,7 +97,7 @@ def _byte_array_to_hex_string(byte_array):
     return res
 
 
-def _parse_switch_values(raw_switch_values: str) -> Dict[str, bool]:
+def parse_switch_values(raw_switch_values: str) -> Dict[str, bool]:
     if not raw_switch_values or not isinstance(raw_switch_values, str):
         raise ParseError(
             f'Unexpected argument to _parse_switch_values: {raw_switch_values}'
@@ -123,7 +125,7 @@ def _parse_switch_values(raw_switch_values: str) -> Dict[str, bool]:
     return res
 
 
-def _parse_homing_status_values(raw_homing_status_values):
+def parse_homing_status_values(raw_homing_status_values):
     """
     Parse the Smoothieware response to a G28.6 command (homing-status)
     A "1" means it has been homed, and "0" means it has not been homed

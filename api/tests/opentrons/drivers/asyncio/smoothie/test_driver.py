@@ -121,6 +121,12 @@ async def test_functional(smoothie: driver.SmoothieDriver):
     assert smoothie.position == smoothie.homed_position
 
 
+async def test_read_pipette_v13(smoothie: driver.SmoothieDriver, mock_connection: AsyncMock):
+    mock_connection.send_command.return_value = 'L:' + parse_utils.byte_array_to_hex_string(b'p300_single_v13')
+    res = await smoothie.read_pipette_model('left')
+    assert res == 'p300_single_v1.3'
+
+
 async def test_switch_state(smoothie: driver.SmoothieDriver, mock_connection: AsyncMock):
     smoothie_switch_res = 'X_max:0 Y_max:0 Z_max:0 A_max:0 B_max:0 C_max:0' \
                           ' _pins ' \
