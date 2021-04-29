@@ -19,3 +19,26 @@ def test_parse_position_response(smoothie):
     with pytest.raises(ParseError):
         parse_utils._parse_position_response(bad_data)
 
+
+def test_parse_pipette_data():
+    msg = 'TestsRule!!'
+    mount = 'L'
+    good_data = mount + ': ' + parse_utils._byte_array_to_hex_string(msg.encode())
+    parsed = parse_utils._parse_instrument_data(
+        good_data).get(mount)
+    assert parsed.decode() == msg
+
+
+def test_read_pipette_v13(smoothie, monkeypatch):
+    driver = smoothie
+    driver.simulating = False
+
+    def _new_send_message(
+            command, timeout=None, suppress_error_msg=True):
+        return 'L:' + parse_utils._byte_array_to_hex_string(
+            b'p300_single_v13')
+
+    monkeypatch.setattr(driver, '_send_command', _new_send_message)
+
+    res = driver.read_pipette_model('left')
+    assert res == 'p300_single_v1.3'
