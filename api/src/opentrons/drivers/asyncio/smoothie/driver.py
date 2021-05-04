@@ -214,13 +214,15 @@ class SmoothieDriver:
         bounds['Y'] = Y_BOUND_OVERRIDE
         return bounds
 
-    def _update_position(self, target):
+    def _update_position(self, target: Dict[str, float]) -> None:
+        """Update the cached position."""
         self._position.update({
             axis: value
             for axis, value in target.items() if value is not None
         })
 
-    async def update_position(self):
+    async def update_position(self) -> None:
+        """Get the current position from the smoothie and cache it."""
         async def _recursive_update_position(retries):
             try:
                 position_response = await self._send_command(
@@ -239,7 +241,7 @@ class SmoothieDriver:
 
         self._update_position(updated_position)
 
-    def configure_splits_for(self, config: MoveSplits):
+    def configure_splits_for(self, config: MoveSplits) -> None:
         """ Configure the driver to automatically split moves on a given
         axis that execute (including pauses) after a specified amount of
         time. The move created will adhere to the split config.
@@ -254,7 +256,7 @@ class SmoothieDriver:
         log.info(f"Updated move split config with {config}")
         self._axes_moved_at.reset_moved(config.keys())
 
-    async def read_pipette_id(self, mount) -> Optional[str]:
+    async def read_pipette_id(self, mount: str) -> Optional[str]:
         """
         Reads in an attached pipette's ID
         The ID is unique to this pipette, and is a string of unknown length
@@ -270,7 +272,7 @@ class SmoothieDriver:
             res = None
         return res
 
-    async def read_pipette_model(self, mount) -> Optional[str]:
+    async def read_pipette_model(self, mount: str) -> Optional[str]:
         """
         Reads an attached pipette's MODEL
         The MODEL is a unique string for this model of pipette
@@ -307,7 +309,7 @@ class SmoothieDriver:
         await self._write_to_pipette(
             GCODE.WRITE_INSTRUMENT_ID, mount, data_string)
 
-    async def write_pipette_model(self, mount: str, data_string: str):
+    async def write_pipette_model(self, mount: str, data_string: str) -> None:
         """
         Writes to an attached pipette's MODEL memory location
         The MODEL is a unique string for this model of pipette
@@ -376,7 +378,6 @@ class SmoothieDriver:
         if self.is_connected():
             self._connection.close()  # type: ignore
         self._connection = None
-        # self.simulating = True
 
     async def is_connected(self) -> bool:
         if not self._connection:
@@ -487,7 +488,7 @@ class SmoothieDriver:
         return self._current_settings['now']
 
     @property
-    def speed(self):
+    def speed(self) -> None:
         pass
 
     @property
@@ -502,6 +503,7 @@ class SmoothieDriver:
         finally:
             self.set_speed(self._combined_speed)
 
+    @staticmethod
     def _build_speed_command(self, speed: float) -> CommandBuilder:
         return _command_builder().add_gcode(
             gcode=GCODE.SET_SPEED
@@ -515,10 +517,10 @@ class SmoothieDriver:
         log.debug(f"set_speed: {command}")
         await self._send_command(command)
 
-    def push_speed(self):
+    def push_speed(self) -> None:
         self._saved_axes_speed = float(self._combined_speed)
 
-    async def pop_speed(self):
+    async def pop_speed(self) -> None:
         await self.set_speed(self._saved_axes_speed)
 
     @contextlib.contextmanager
@@ -530,7 +532,7 @@ class SmoothieDriver:
             self.set_axis_max_speed(self._max_speed_settings)  # type: ignore
 
     async def set_axis_max_speed(
-            self, settings: Dict[str, float], update: bool = True):
+            self, settings: Dict[str, float], update: bool = True) -> None:
         """
         Sets the maximum speed (mm/sec) that a given axis will move
 
@@ -552,13 +554,13 @@ class SmoothieDriver:
         log.debug(f"set_axis_max_speed: {command}")
         await self._send_command(command)
 
-    def push_axis_max_speed(self):
+    def push_axis_max_speed(self) -> None:
         self._saved_max_speed_settings = self._max_speed_settings.copy()
 
-    async def pop_axis_max_speed(self):
+    async def pop_axis_max_speed(self) -> None:
         await self.set_axis_max_speed(self._saved_max_speed_settings)  # type: ignore
 
-    async def set_acceleration(self, settings: Dict[str, float]):
+    async def set_acceleration(self, settings: Dict[str, float]) -> None:
         """
         Sets the acceleration (mm/sec^2) that a given axis will move
 
@@ -579,13 +581,13 @@ class SmoothieDriver:
         log.debug(f"set_acceleration: {command}")
         await self._send_command(command)
 
-    def push_acceleration(self):
+    def push_acceleration(self) -> None:
         self._saved_acceleration = self._acceleration.copy()
 
-    async def pop_acceleration(self):
+    async def pop_acceleration(self) -> None:
         await self.set_acceleration(self._saved_acceleration)
 
-    def set_active_current(self, settings: Dict[str, float]):
+    def set_active_current(self, settings: Dict[str, float]) -> None:
         """
         Sets the amperage of each motor for when it is activated by driver.
         Values are initialized from the `robot_config.high_current` values,
@@ -611,14 +613,14 @@ class SmoothieDriver:
         if active_axes_to_update:
             self._save_current(active_axes_to_update, axes_active=True)
 
-    def push_active_current(self):
+    def push_active_current(self) -> None:
         self._active_current_settings['saved'].update(
             self._active_current_settings['now'])
 
-    def pop_active_current(self):
+    def pop_active_current(self) -> None:
         self.set_active_current(self._active_current_settings['saved'])
 
-    def set_dwelling_current(self, settings: Dict[str, float]):
+    def set_dwelling_current(self, settings: Dict[str, float]) -> None:
         """
         Sets the amperage of each motor for when it is dwelling.
         Values are initialized from the `robot_config.log_current` values,
@@ -644,15 +646,15 @@ class SmoothieDriver:
         if dwelling_axes_to_update:
             self._save_current(dwelling_axes_to_update, axes_active=False)
 
-    def push_dwelling_current(self):
+    def push_dwelling_current(self) -> None:
         self._dwelling_current_settings['saved'].update(
             self._dwelling_current_settings['now'])
 
-    def pop_dwelling_current(self):
+    def pop_dwelling_current(self) -> None:
         self.set_dwelling_current(self._dwelling_current_settings['saved'])
 
     def _save_current(
-            self, settings: Dict[str, float], axes_active: bool = True):
+            self, settings: Dict[str, float], axes_active: bool = True) -> None:
         """
         Sets the current in Amperes (A) by axis. Currents are limited to be
         between 0.0-2.0 amps per axis motor.
@@ -698,7 +700,7 @@ class SmoothieDriver:
         log.debug(f"_generate_current_command: {command}")
         return command
 
-    async def disengage_axis(self, axes: str):
+    async def disengage_axis(self, axes: str) -> None:
         """
         Disable the stepper-motor-driver's 36v output to motor
         This is a safe GCODE to send to Smoothieware, as it will automatically
@@ -719,7 +721,7 @@ class SmoothieDriver:
             for axis in axes:
                 self.engaged_axes[axis] = False
 
-    def dwell_axes(self, axes: str):
+    def dwell_axes(self, axes: str) -> None:
         """
         Sets motors to low current, for when they are not moving.
 
@@ -738,7 +740,7 @@ class SmoothieDriver:
         if dwelling_currents:
             self._save_current(dwelling_currents, axes_active=False)
 
-    def activate_axes(self, axes: str):
+    def activate_axes(self, axes: str) -> None:
         """
         Sets motors to a high current, for when they are moving
         and/or must hold position
@@ -759,7 +761,7 @@ class SmoothieDriver:
 
     # ----------- Private functions --------------- #
 
-    async def _wait_for_ack(self):
+    async def _wait_for_ack(self) -> None:
         """
         In the case where smoothieware has just been reset, we want to
         ignore all the garbage it spits out
@@ -769,7 +771,7 @@ class SmoothieDriver:
         """
         await self._send_command(_command_builder(), timeout=SMOOTHIE_BOOT_TIMEOUT)
 
-    async def _reset_from_error(self):
+    async def _reset_from_error(self) -> None:
         # smoothieware will ignore new messages for a short time
         # after it has entered an error state, so sleep for some milliseconds
         sleep(DEFAULT_STABILIZE_DELAY)
@@ -786,7 +788,7 @@ class SmoothieDriver:
             timeout: float = DEFAULT_EXECUTE_TIMEOUT,
             suppress_error_msg: bool = False,
             ack_timeout: float = DEFAULT_ACK_TIMEOUT,
-            suppress_home_after_error: bool = False):
+            suppress_home_after_error: bool = False) -> str:
         """
         Submit a GCODE command to the robot, followed by M400 to block until
         done. This method also ensures that any command on the B or C axis
@@ -846,7 +848,7 @@ class SmoothieDriver:
 
     async def _send_command_unsynchronized(
             self, command: CommandBuilder,
-            ack_timeout: float, execute_timeout: float):
+            ack_timeout: float, execute_timeout: float) -> str:
         """
 
         Args:
@@ -869,7 +871,7 @@ class SmoothieDriver:
 
     def _handle_return(
             self, ret_code: str, is_alarm: bool = False, is_error: bool = False
-    ):
+    ) -> None:
         """ Check the return string from smoothie for an error condition.
 
         Usually raises a SmoothieError, which can be handled by the error
@@ -905,7 +907,7 @@ class SmoothieDriver:
                     log.error(f"alarm/error outside hard halt: {ret_code}")
                     raise SmoothieError(ret_code)
 
-    async def _home_x(self):
+    async def _home_x(self) -> None:
         log.debug("_home_x")
         # move the gantry forward on Y axis with low power
         self._save_current({'Y': Y_BACKOFF_LOW_CURRENT})
@@ -956,7 +958,7 @@ class SmoothieDriver:
             self.dwell_axes('X')
             await self._set_saved_current()
 
-    async def _home_y(self):
+    async def _home_y(self) -> None:
         log.debug("_home_y")
         # override firmware's default XY homing speed, to avoid resonance
         self.push_axis_max_speed()
@@ -1004,7 +1006,7 @@ class SmoothieDriver:
             self.dwell_axes('Y')
             await self._set_saved_current()
 
-    async def _setup(self):
+    async def _setup(self) -> None:
         log.debug("_setup")
         try:
             await self._wait_for_ack()

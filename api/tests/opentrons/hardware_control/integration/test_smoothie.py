@@ -1,5 +1,3 @@
-from copy import deepcopy
-from unittest.mock import Mock
 import pytest
 from mock import MagicMock
 from opentrons.drivers.types import MoveSplit
@@ -8,7 +6,6 @@ from opentrons.hardware_control.emulation.app import SMOOTHIE_PORT
 from tests.opentrons.conftest import fuzzy_assert
 from opentrons.config.robot_configs import (
     DEFAULT_GANTRY_STEPS_PER_MM, DEFAULT_PIPETTE_CONFIGS, build_config)
-from opentrons.drivers import serial_communication
 from opentrons.drivers.smoothie_drivers import driver_3_0
 
 
