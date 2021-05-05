@@ -44,7 +44,7 @@ async def test_with_thermocycler(loop):
                  'holdTime': 121,
                  'lid': 'open',
                  'lidTarget': None,
-                 'lidTemp': 0,
+                 'lidTemp': 23,
                  'rampRate': None,
                  'targetTemp': 3,
                  'totalCycleCount': None,

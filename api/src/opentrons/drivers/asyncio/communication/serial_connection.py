@@ -1,31 +1,18 @@
+from __future__ import annotations
+
 import asyncio
 import logging
 from typing import Optional
 
+from opentrons.drivers.command_builder import CommandBuilder
+
+from .errors import NoResponse, AlarmResponse, ErrorResponse
 from .async_serial import AsyncSerial
 
 log = logging.getLogger(__name__)
 
 
-class SerialException(Exception):
-    pass
-
-
-class NoResponse(SerialException):
-    pass
-
-
-class AlarmResponse(SerialException):
-    pass
-
-
-class ErrorResponse(SerialException):
-    pass
-
-
 class SerialConnection:
-
-    RETRY_WAIT_TIME = 0.1
 
     @classmethod
     async def create(
@@ -34,7 +21,9 @@ class SerialConnection:
             baud_rate: int,
             timeout: int,
             ack: str,
-            name: Optional[str] = None) -> 'SerialConnection':
+            name: Optional[str] = None,
+            retry_wait_time_seconds: float = 0.1,
+    ) -> SerialConnection:
         """
         Create a connection.
 
@@ -44,62 +33,95 @@ class SerialConnection:
             timeout: timeout in seconds
             ack: the command response ack
             name: the connection name
+            retry_wait_time_seconds: how long to wait between retries.
 
         Returns: SerialConnection
         """
         serial = await AsyncSerial.create(port=port, baud_rate=baud_rate,
                                           timeout=timeout)
         name = name or port
-        return cls(serial=serial, port=port, name=name, ack=ack)
+        return cls(
+            serial=serial, port=port, name=name,
+            ack=ack, retry_wait_time_seconds=retry_wait_time_seconds
+        )
 
-    def __init__(self, serial: AsyncSerial, port: str, name: str, ack: str) -> None:
+    def __init__(
+            self,
+            serial: AsyncSerial,
+            port: str,
+            name: str,
+            ack: str,
+            retry_wait_time_seconds: float
+    ) -> None:
         """
         Constructor
 
         Args:
             serial: AsyncSerial object
+            port: url or port to connect to
+            ack: the command response ack
+            name: the connection name
+            retry_wait_time_seconds: how long to wait between retries.
         """
         self._serial = serial
         self._port = port
         self._name = name
         self._ack = ack.encode()
+        self._retry_wait_time_seconds = retry_wait_time_seconds
 
     async def send_command(
-            self, data: str, retries: int = 0
+            self, command: CommandBuilder, retries: int = 0
     ) -> str:
         """
         Send a command and return the response.
 
         Args:
+            command: A command builder.
+            retries: number of times to retry in case of timeout
+
+        Returns: The command response
+
+        Raises: SerialException
+        """
+        return await self.send_data(data=command.build(), retries=retries)
+
+    async def send_data(
+            self, data: str, retries: int = 0
+    ) -> str:
+        """
+        Send data and return the response.
+
+        Args:
             data: The data to send.
-            retries: number of times to retry in case of failure
+            retries: number of times to retry in case of timeout
 
         Returns: The command response
 
         Raises: SerialException
         """
         data_encode = data.encode()
-        log.debug(f'{self.name}: Write -> {data_encode!r}')
-        await self._serial.write(data=data_encode)
 
-        response = await self._serial.read_until(match=self._ack)
-        log.debug(f'{self.name}: Read <- {response!r}')
+        for retry in range(retries + 1):
+            log.debug(f'{self.name}: Write -> {data_encode!r}')
+            await self._serial.write(data=data_encode)
 
-        if self._ack in response:
-            response = response.replace(self._ack, b'')
-            str_response = response.decode()
-            self.raise_on_error(response=str_response)
-            return str_response
+            response = await self._serial.read_until(match=self._ack)
+            log.debug(f'{self.name}: Read <- {response!r}')
 
-        log.warning(f'{self.name}: retry number {retries}')
+            if self._ack in response:
+                # Remove ack from response
+                response = response.replace(self._ack, b'')
+                str_response = self.process_raw_response(
+                    command=data, response=response.decode()
+                )
+                self.raise_on_error(response=str_response)
+                return str_response
 
-        retries -= 1
-        if retries < 0:
-            raise NoResponse("retry count exhausted")
+            log.warning(f'{self.name}: retry number {retry}/{retries}')
 
-        await self._on_retry()
+            await self.on_retry()
 
-        return await self.send_command(data=data, retries=retries)
+        raise NoResponse("retry count exhausted")
 
     async def open(self) -> None:
         """Open the connection."""
@@ -140,13 +162,27 @@ class SerialConnection:
         if "alarm" in lower:
             raise AlarmResponse(response)
 
-    async def _on_retry(self) -> None:
+    async def on_retry(self) -> None:
         """
         Opportunity for derived classes to perform action between retries. Default
         behaviour is to wait then re-open the connection.
 
         Returns: None
         """
-        await asyncio.sleep(self.RETRY_WAIT_TIME)
+        await asyncio.sleep(self._retry_wait_time_seconds)
         await self._serial.close()
         await self._serial.open()
+
+    def process_raw_response(self, command: str, response: str) -> str:
+        """
+        Opportunity for derived classes to process the raw response. Default
+         strips white space.
+
+        Args:
+            command: The sent command.
+            response: The raw read response minus ack.
+
+        Returns:
+            processed response.
+        """
+        return response.strip()

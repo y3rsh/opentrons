@@ -9,31 +9,31 @@ from typing import Any, Dict, Optional, Union, List, Tuple, cast
 
 from math import isclose
 
-from opentrons.drivers.asyncio.smoothie.command_sender import \
-    SmoothieCommandSender
-from opentrons.drivers.asyncio.smoothie.constants import GCODE, HOMED_POSITION, \
-    Y_BOUND_OVERRIDE, SMOOTHIE_COMMAND_TERMINATOR, SMOOTHIE_ACK, \
-    PLUNGER_BACKLASH_MM, CURRENT_CHANGE_DELAY, PIPETTE_READ_DELAY, \
-    Y_SWITCH_BACK_OFF_MM, Y_SWITCH_REVERSE_BACK_OFF_MM, Y_BACKOFF_LOW_CURRENT, \
-    Y_BACKOFF_SLOW_SPEED, Y_RETRACT_SPEED, Y_RETRACT_DISTANCE, UNSTICK_DISTANCE, \
-    UNSTICK_SPEED, DEFAULT_AXES_SPEED, XY_HOMING_SPEED, HOME_SEQUENCE, AXES, \
-    DISABLE_AXES, SEC_PER_MIN, DEFAULT_ACK_TIMEOUT, DEFAULT_EXECUTE_TIMEOUT, \
-    DEFAULT_MOVEMENT_TIMEOUT, SMOOTHIE_BOOT_TIMEOUT, DEFAULT_STABILIZE_DELAY, \
+from serial.serialutil import SerialException  # type: ignore
+
+from opentrons.drivers.asyncio.smoothie.connection import \
+    SmoothieConnection
+from opentrons.drivers.asyncio.smoothie.constants import (
+    GCODE, HOMED_POSITION, Y_BOUND_OVERRIDE, SMOOTHIE_COMMAND_TERMINATOR, SMOOTHIE_ACK,
+    PLUNGER_BACKLASH_MM, CURRENT_CHANGE_DELAY, PIPETTE_READ_DELAY,
+    Y_SWITCH_BACK_OFF_MM, Y_SWITCH_REVERSE_BACK_OFF_MM, Y_BACKOFF_LOW_CURRENT,
+    Y_BACKOFF_SLOW_SPEED, Y_RETRACT_SPEED, Y_RETRACT_DISTANCE, UNSTICK_DISTANCE,
+    UNSTICK_SPEED, DEFAULT_AXES_SPEED, XY_HOMING_SPEED, HOME_SEQUENCE, AXES,
+    DISABLE_AXES, SEC_PER_MIN, DEFAULT_ACK_TIMEOUT, DEFAULT_EXECUTE_TIMEOUT,
+    DEFAULT_MOVEMENT_TIMEOUT, SMOOTHIE_BOOT_TIMEOUT, DEFAULT_STABILIZE_DELAY,
     DEFAULT_COMMAND_RETRIES, MICROSTEPPING_GCODES, GCODE_ROUNDING_PRECISION
+)
 from opentrons.drivers.asyncio.smoothie.errors import SmoothieError, \
     SmoothieAlarm, TipProbeError
-from opentrons.drivers.asyncio.smoothie.parse_utils import \
-    parse_position_response, parse_instrument_data, \
-    byte_array_to_ascii_string, byte_array_to_hex_string, \
-    parse_switch_values, parse_homing_status_values
+from opentrons.drivers.asyncio.smoothie import parse_utils
 from opentrons.drivers.command_builder import CommandBuilder
 from opentrons.drivers.serial_communication import get_ports_by_name
-from serial.serialutil import SerialException  # type: ignore
 
 from opentrons.config.types import RobotConfig
 from opentrons.config.robot_configs import current_for_revision
-from opentrons.drivers.asyncio.communication import SerialConnection, \
-    NoResponse, AlarmResponse, ErrorResponse
+from opentrons.drivers.asyncio.communication import (
+    SerialConnection, NoResponse, AlarmResponse, ErrorResponse
+)
 from opentrons.drivers.types import MoveSplits
 from opentrons.drivers.utils import (
     AxisMoveTimestamp, ParseError
@@ -41,6 +41,7 @@ from opentrons.drivers.utils import (
 from opentrons.drivers.rpi_drivers.gpio_simulator import SimulatingGPIOCharDev
 from opentrons.drivers.rpi_drivers.dev_types import GPIODriverLike
 from opentrons.system import smoothie_update
+from .types import CurrentSettings
 
 """
 - Driver is responsible for providing an interface for motion control
@@ -79,7 +80,7 @@ class SmoothieDriver:
         Returns:
             A SmoothieDriver instance.
         """
-        connection = await SerialConnection.create(
+        connection = await SmoothieConnection.create(
             port=port,
             baud_rate=config.serial_speed,
             name='smoothie',
@@ -90,14 +91,14 @@ class SmoothieDriver:
 
         return cls(
             config=config,
-            connection=SmoothieCommandSender(connection=connection),
+            connection=connection,
             gpio_chardev=gpio_chardev
         )
 
     def __init__(
             self,
             config: RobotConfig,
-            connection: SmoothieCommandSender,
+            connection: SerialConnection,
             gpio_chardev: GPIODriverLike):
         """
         Constructor
@@ -125,36 +126,15 @@ class SmoothieDriver:
         # Current-Settings is the amperage each axis was last set to
         # Active-Current-Settings is set when an axis is moving/homing
         # Dwelling-Current-Settings is set when an axis is NOT moving/homing
-        self._current_settings: Dict[str, Dict[str, float]] = {
-            'now': cast(
-                Dict[str, float],
-                current_for_revision(
-                    config.low_current, self._gpio_chardev.board_rev).copy()),
-            'saved': cast(
-                Dict[str, float],
-                current_for_revision(
-                    config.low_current, self._gpio_chardev.board_rev).copy()),
-        }
-        self._active_current_settings: Dict[str, Dict[str, float]] = {
-            'now': cast(
-                Dict[str, float],
-                current_for_revision(
-                    config.high_current, self._gpio_chardev.board_rev).copy()),
-            'saved': cast(
-                Dict[str, float],
-                current_for_revision(
-                    config.high_current, self._gpio_chardev.board_rev).copy()),
-        }
-        self._dwelling_current_settings: Dict[str, Dict[str, float]] = {
-            'now': cast(
-                Dict[str, float],
-                current_for_revision(
-                    config.low_current, self._gpio_chardev.board_rev).copy()),
-            'saved': cast(
-                Dict[str, float],
-                current_for_revision(
-                    config.low_current, self._gpio_chardev.board_rev).copy()),
-        }
+        self._current_settings = CurrentSettings(
+            val=current_for_revision(config.low_current, self._gpio_chardev.board_rev)
+        )
+        self._active_current_settings = CurrentSettings(
+            val=current_for_revision(config.high_current, self._gpio_chardev.board_rev)
+        )
+        self._dwelling_current_settings = CurrentSettings(
+            val=current_for_revision(config.low_current, self._gpio_chardev.board_rev)
+        )
 
         # Active axes are axes that are in use. An axis might be disabled if
         # a motor has had a failure and the robot is operating without that
@@ -228,7 +208,7 @@ class SmoothieDriver:
                 position_response = await self._send_command(
                     _command_builder().add_gcode(gcode=GCODE.CURRENT_POSITION)
                 )
-                return parse_position_response(position_response)
+                return parse_utils.parse_position_response(position_response)
             except ParseError as e:
                 retries -= 1
                 if retries <= 0:
@@ -382,7 +362,7 @@ class SmoothieDriver:
     async def is_connected(self) -> bool:
         if not self._connection:
             return False
-        return await self._connection.serial.is_open()
+        return await self._connection.is_open()
 
     async def _connect_to_port(self, port: str = None):
         try:
@@ -452,7 +432,7 @@ class SmoothieDriver:
         res = await self._send_command(_command_builder().add_gcode(
             gcode=GCODE.LIMIT_SWITCH_STATUS
         ))
-        return parse_switch_values(res)
+        return parse_utils.parse_switch_values(res)
 
     async def update_homed_flags(
             self, flags: Dict[str, bool] = None):
@@ -466,13 +446,13 @@ class SmoothieDriver:
         if flags and isinstance(flags, dict):
             self.homed_flags.update(flags)
 
-        elif self.is_connected():
+        elif await self.is_connected():
 
             async def _recursive_update_homed_flags(retries: int):
                 try:
                     res = await self._send_command(
                         _command_builder().add_gcode(gcode=GCODE.HOMING_STATUS))
-                    flags = parse_homing_status_values(res)
+                    flags = parse_utils.parse_homing_status_values(res)
                     self.homed_flags.update(flags)
                 except ParseError as e:
                     retries -= 1
@@ -485,7 +465,7 @@ class SmoothieDriver:
 
     @property
     def current(self) -> Dict[str, float]:
-        return self._current_settings['now']
+        return self._current_settings.now
 
     @property
     def speed(self) -> None:
@@ -600,13 +580,13 @@ class SmoothieDriver:
             Dict with axes as valies (e.g.: 'X', 'Y', 'Z', 'A', 'B', or 'C')
             and floating point number for current (generally between 0.1 and 2)
         """
-        self._active_current_settings['now'].update(settings)
+        self._active_current_settings.now.update(settings)
 
         # if an axis specified in the `settings` is currently active,
         # reset it's current to the new active-current value
         active_axes_to_update = {
             axis: amperage
-            for axis, amperage in self._active_current_settings['now'].items()
+            for axis, amperage in self._active_current_settings.now.items()
             if self._active_axes.get(axis) is True
             if self.current[axis] != amperage
         }
@@ -614,11 +594,11 @@ class SmoothieDriver:
             self._save_current(active_axes_to_update, axes_active=True)
 
     def push_active_current(self) -> None:
-        self._active_current_settings['saved'].update(
-            self._active_current_settings['now'])
+        self._active_current_settings.saved.update(
+            self._active_current_settings.now)
 
     def pop_active_current(self) -> None:
-        self.set_active_current(self._active_current_settings['saved'])
+        self.set_active_current(self._active_current_settings.saved)
 
     def set_dwelling_current(self, settings: Dict[str, float]) -> None:
         """
@@ -633,13 +613,13 @@ class SmoothieDriver:
             Dict with axes as valies (e.g.: 'X', 'Y', 'Z', 'A', 'B', or 'C')
             and floating point number for current (generally between 0.1 and 2)
         """
-        self._dwelling_current_settings['now'].update(settings)
+        self._dwelling_current_settings.now.update(settings)
 
         # if an axis specified in the `settings` is currently dwelling,
         # reset it's current to the new dwelling-current value
         dwelling_axes_to_update = {
             axis: amps
-            for axis, amps in self._dwelling_current_settings['now'].items()
+            for axis, amps in self._dwelling_current_settings.now.items()
             if self._active_axes.get(axis) is False
             if self.current[axis] != amps
         }
@@ -647,11 +627,11 @@ class SmoothieDriver:
             self._save_current(dwelling_axes_to_update, axes_active=False)
 
     def push_dwelling_current(self) -> None:
-        self._dwelling_current_settings['saved'].update(
-            self._dwelling_current_settings['now'])
+        self._dwelling_current_settings.saved.update(
+            self._dwelling_current_settings.now)
 
     def pop_dwelling_current(self) -> None:
-        self.set_dwelling_current(self._dwelling_current_settings['saved'])
+        self.set_dwelling_current(self._dwelling_current_settings.saved)
 
     def _save_current(
             self, settings: Dict[str, float], axes_active: bool = True) -> None:
@@ -671,7 +651,7 @@ class SmoothieDriver:
             ax: axes_active
             for ax in settings.keys()
         })
-        self._current_settings['now'].update(settings)
+        self._current_settings.now.update(settings)
         log.debug(f"_save_current: {self.current}")
 
     async def _set_saved_current(self) -> None:
@@ -733,7 +713,7 @@ class SmoothieDriver:
         """
         axes = ''.join(set(axes) & set(AXES) - set(DISABLE_AXES))
         dwelling_currents = {
-            ax: self._dwelling_current_settings['now'][ax]
+            ax: self._dwelling_current_settings.now[ax]
             for ax in axes
             if self._active_axes[ax] is True
         }
@@ -752,7 +732,7 @@ class SmoothieDriver:
         """
         axes = ''.join(set(axes) & set(AXES) - set(DISABLE_AXES))
         active_currents = {
-            ax: self._active_current_settings['now'][ax]
+            ax: self._active_current_settings.now[ax]
             for ax in axes
             if self._active_axes[ax] is False
         }
@@ -860,10 +840,22 @@ class SmoothieDriver:
 
         """
         try:
-            return await self._connection.send_command(
+            command_result = await self._connection.send_command(
                 command=command,
                 retries=DEFAULT_COMMAND_RETRIES
             )
+
+            wait_command = CommandBuilder(
+                terminator=SMOOTHIE_COMMAND_TERMINATOR
+            ).add_gcode(
+                gcode=GCODE.WAIT
+            )
+
+            await self._connection.send_command(
+                command=wait_command,
+                retries=0
+            )
+            return command_result
         except AlarmResponse as e:
             self._handle_return(ret_code=str(e), is_alarm=True)
         except ErrorResponse as e:
@@ -1089,11 +1081,11 @@ class SmoothieDriver:
                 _command_builder().add_gcode(gcode=gcode).add_element(allowed_mount),
                 suppress_error_msg=True)
             if res:
-                res = parse_instrument_data(res)
+                res = parse_utils.parse_instrument_data(res)
                 assert allowed_mount in res
                 # data is read/written as strings of HEX characters
                 # to avoid firmware weirdness in how it parses GCode arguments
-                return byte_array_to_ascii_string(res[allowed_mount])
+                return parse_utils.byte_array_to_ascii_string(res[allowed_mount])
         except (ParseError, AssertionError, SmoothieError):
             pass
         return None
@@ -1127,8 +1119,9 @@ class SmoothieDriver:
         await self.delay(CURRENT_CHANGE_DELAY)
         # data is read/written as strings of HEX characters
         # to avoid firmware weirdness in how it parses GCode arguments
-        byte_string = byte_array_to_hex_string(
-            bytearray(data_string.encode()))
+        byte_string = parse_utils.byte_array_to_hex_string(
+            bytearray(data_string.encode())
+        )
         command = _command_builder().add_gcode(
             gcode=gcode
         ).add_element(

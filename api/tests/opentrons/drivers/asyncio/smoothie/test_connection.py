@@ -1,22 +1,26 @@
 import opentrons.drivers.asyncio.smoothie.constants
 import pytest
 from mock import AsyncMock, call
-from opentrons.drivers.asyncio.communication import SerialConnection
+from opentrons.drivers.asyncio.communication import SerialConnection, \
+    AsyncSerial
 from opentrons.drivers.asyncio.smoothie import driver
-from opentrons.drivers.asyncio.smoothie.command_sender import SmoothieCommandSender
+from opentrons.drivers.asyncio.smoothie.connection import SmoothieConnection
 from opentrons.drivers.command_builder import CommandBuilder
 
 
 @pytest.fixture
 def mock_serial_connection() -> AsyncMock:
     """Mock serial connection."""
-    return AsyncMock(spec=SerialConnection)
+    return AsyncMock(spec=AsyncSerial)
 
 
 @pytest.fixture
-def subject(mock_serial_connection: AsyncMock) -> SmoothieCommandSender:
+def subject(mock_serial_connection: AsyncMock) -> SmoothieConnection:
     """The test subject."""
-    return SmoothieCommandSender(connection=mock_serial_connection)
+    return SmoothieConnection(
+        serial=mock_serial_connection, port="", ack="\r\n", name="",
+        retry_wait_time_seconds=0
+    )
 
 
 @pytest.fixture
@@ -31,47 +35,19 @@ def command() -> CommandBuilder:
     )
 
 
-async def test_command_sender_calls_commands(
-        subject: SmoothieCommandSender, mock_serial_connection: AsyncMock, command: CommandBuilder
-) -> None:
-    """It should send the requested command followed by a wait."""
-    await subject.send_command(command=command, retries=3)
-
-    assert mock_serial_connection.send_command.call_args_list == [
-        call(data=command.build(), retries=3),
-        call(data=CommandBuilder(
-            terminator=opentrons.drivers.asyncio.smoothie.constants.SMOOTHIE_COMMAND_TERMINATOR
-        ).add_gcode(
-            opentrons.drivers.asyncio.smoothie.constants.GCODE.WAIT
-        ).build(), retries=0)
-    ]
-
-
-async def test_command_sender_returns_result(
-        subject: SmoothieCommandSender, mock_serial_connection: AsyncMock, command: CommandBuilder
-) -> None:
-    """It should return the result of command."""
-    mock_serial_connection.send_command.side_effect = [
-        "a", "b"
-    ]
-
-    result = await subject.send_command(command=command, retries=3)
-    assert result == "a"
-
-
 async def test_command_sender_sanitized_response(
-        subject: SmoothieCommandSender,
+        subject: SmoothieConnection,
         mock_serial_connection: AsyncMock,
         command: CommandBuilder
 ) -> None:
     """It should return sanitized result."""
-    mock_serial_connection.send_command.side_effect = [
-        f"{command.build()}\r\n  a  \r\n",
-        "b"
-    ]
+    sanitized_body = "a"
+    full_body = f"{command.build()}\r\n  {sanitized_body}  \r\n"
+
+    mock_serial_connection.read_until.return_value = full_body.encode()
 
     result = await subject.send_command(command=command, retries=3)
-    assert result == "a"
+    assert result == sanitized_body
 
 
 @pytest.mark.parametrize(
@@ -106,6 +82,6 @@ async def test_command_sender_sanitized_response(
 def test_remove_serial_echo(
         cmd: str, resp: str, expected: str):
     """It should remove unwanted characters only."""
-    res = SmoothieCommandSender._remove_unwanted_characters(
+    res = SmoothieConnection._remove_unwanted_characters(
         cmd, resp)
     assert res == expected

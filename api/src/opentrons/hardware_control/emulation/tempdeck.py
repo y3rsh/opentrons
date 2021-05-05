@@ -11,6 +11,7 @@ from opentrons.hardware_control.emulation import util
 from opentrons.hardware_control.emulation.parser import Parser, Command
 
 from .abstract_emulator import AbstractEmulator
+from .simulations import Temperature
 
 
 logger = logging.getLogger(__name__)
@@ -25,8 +26,9 @@ class TempDeckEmulator(AbstractEmulator):
     """TempDeck emulator"""
 
     def __init__(self, parser: Parser) -> None:
-        self.target_temp = util.OptionalValue[float]()
-        self.current_temp = 0.0
+        self._temperature = Temperature(
+            per_tick=.25, current=0.0
+        )
         self._parser = parser
 
     def handle(self, line: str) -> Optional[str]:
@@ -39,20 +41,19 @@ class TempDeckEmulator(AbstractEmulator):
         """Handle a command."""
         logger.info(f"Got command {command}")
         if command.gcode == GCODE.GET_TEMP:
-            return f"T:{self.target_temp} C:{self.current_temp}"
+            res = f"T:{util.OptionalValue(self._temperature.target)} " \
+                  f"C:{self._temperature.current}"
+            self._temperature.tick()
+            return res
         elif command.gcode == GCODE.SET_TEMP:
             temperature = command.params['S']
             assert isinstance(temperature, float),\
                 f"invalid temperature '{temperature}'"
-            self._set_target(temperature)
+            self._temperature.set_target(temperature)
         elif command.gcode == GCODE.DISENGAGE:
-            self._set_target(util.TEMPERATURE_ROOM)
+            self._temperature.deactivate(util.TEMPERATURE_ROOM)
         elif command.gcode == GCODE.DEVICE_INFO:
             return f"serial:{SERIAL} model:{MODEL} version:{VERSION}"
         elif command.gcode == GCODE.PROGRAMMING_MODE:
             pass
         return None
-
-    def _set_target(self, target_temp: float) -> None:
-        self.target_temp.val = target_temp
-        self.current_temp = self.target_temp.val

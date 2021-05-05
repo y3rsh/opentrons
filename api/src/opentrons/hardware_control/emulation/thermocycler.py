@@ -10,6 +10,7 @@ from opentrons.drivers.types import ThermocyclerLidStatus
 from opentrons.hardware_control.emulation.parser import Parser, Command
 
 from .abstract_emulator import AbstractEmulator
+from .simulations import Temperature, TemperatureWithHold
 from . import util
 
 logger = logging.getLogger(__name__)
@@ -23,16 +24,14 @@ class ThermocyclerEmulator(AbstractEmulator):
     """Thermocycler emulator"""
 
     def __init__(self, parser: Parser) -> None:
-        self.lid_target_temp = util.OptionalValue[float]()
-        self.lid_current_temp: float = util.TEMPERATURE_ROOM
+        self._lid_temperate = Temperature(
+            per_tick=2, current=util.TEMPERATURE_ROOM
+        )
+        self._plate_temperate = TemperatureWithHold(
+            per_tick=2, current=util.TEMPERATURE_ROOM
+        )
         self.lid_status = ThermocyclerLidStatus.CLOSED
-        self.lid_at_target: Optional[bool] = None
-        self.plate_total_hold_time = util.OptionalValue[float]()
-        self.plate_time_remaining = util.OptionalValue[float]()
-        self.plate_target_temp = util.OptionalValue[float]()
-        self.plate_current_temp: float = util.TEMPERATURE_ROOM
         self.plate_volume = util.OptionalValue[float]()
-        self.plate_at_target = util.OptionalValue[float]()
         self.plate_ramp_rate = util.OptionalValue[float]()
         self._parser = parser
 
@@ -59,38 +58,45 @@ class ThermocyclerEmulator(AbstractEmulator):
             temperature = command.params['S']
             assert isinstance(temperature, float),\
                 f"invalid temperature '{temperature}'"
-            self.lid_target_temp.val = temperature
-            self.lid_current_temp = self.lid_target_temp.val
+            self._lid_temperate.set_target(temperature)
         elif command.gcode == GCODE.GET_LID_TEMP:
-            return f"T:{self.lid_target_temp} C:{self.lid_current_temp} " \
-                   f"H:none Total_H:none At_target?:0"
+            res = f"T:{util.OptionalValue(self._lid_temperate.target)} " \
+                  f"C:{self._lid_temperate.current} " \
+                  f"H:none Total_H:none"
+            self._lid_temperate.tick()
+            return res
         elif command.gcode == GCODE.EDIT_PID_PARAMS:
             pass
         elif command.gcode == GCODE.SET_PLATE_TEMP:
             for prefix, value in command.params.items():
                 assert isinstance(value, float), f"invalid value '{value}'"
                 if prefix == 'S':
-                    self.plate_target_temp.val = value
-                    self.plate_current_temp = self.plate_target_temp.val
+                    self._plate_temperate.set_target(value)
                 elif prefix == 'V':
                     self.plate_volume.val = value
                 elif prefix == 'H':
-                    self.plate_total_hold_time.val = value
-                    self.plate_time_remaining.val = value
+                    self._plate_temperate.set_hold(value)
         elif command.gcode == GCODE.GET_PLATE_TEMP:
-            return f"T:{self.plate_target_temp} " \
-                   f"C:{self.plate_current_temp} " \
-                   f"H:{self.plate_time_remaining} " \
-                   f"Total_H:{self.plate_total_hold_time} " \
-                   f"At_target?:{self.plate_at_target}"
+            plate_target = util.OptionalValue(self._plate_temperate.target)
+            plate_current = self._plate_temperate.current
+            plate_time_remaining = util.OptionalValue(self._plate_temperate.time_remaining)
+            plate_total_hold_time = util.OptionalValue(self._plate_temperate.total_hold)
+
+            res = f"T:{plate_target} " \
+                  f"C:{plate_current} " \
+                  f"H:{plate_time_remaining} " \
+                  f"Total_H:{plate_total_hold_time} "
+            self._plate_temperate.tick()
+            return res
         elif command.gcode == GCODE.SET_RAMP_RATE:
             self.plate_ramp_rate.val = command.params['S']
         elif command.gcode == GCODE.DEACTIVATE_ALL:
-            pass
+            self._plate_temperate.deactivate(temperature=util.TEMPERATURE_ROOM)
+            self._lid_temperate.deactivate(temperature=util.TEMPERATURE_ROOM)
         elif command.gcode == GCODE.DEACTIVATE_LID:
-            pass
+            self._lid_temperate.deactivate(temperature=util.TEMPERATURE_ROOM)
         elif command.gcode == GCODE.DEACTIVATE_BLOCK:
-            pass
+            self._plate_temperate.deactivate(temperature=util.TEMPERATURE_ROOM)
         elif command.gcode == GCODE.DEVICE_INFO:
             return f"serial:{SERIAL} model:{MODEL} version:{VERSION}"
         return None
