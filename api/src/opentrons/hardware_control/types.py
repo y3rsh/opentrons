@@ -236,13 +236,16 @@ class HardwareAction(enum.Enum):
 
 
 class PauseType(enum.Enum):
-    DOOR = 0
-    APP = 1
-    PROTOCOL = 2
+    APP = 0
+    PROTOCOL = 1
 
     @classmethod
     def all(cls):
-        return (cls.DOOR, cls.APP, cls.PROTOCOL)
+        return [cls.APP, cls.PROTOCOL]
+
+    @property
+    def __str__(self):
+        return self.name
 
     @property
     def priority(self):
@@ -251,7 +254,7 @@ class PauseType(enum.Enum):
 
 @dataclass
 class PauseEvent:
-    name: PauseType
+    name: str
     priority: int
     message: str
 

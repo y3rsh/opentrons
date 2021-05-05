@@ -11,7 +11,7 @@ from opentrons_shared_data.pipette import name_config
 from opentrons import types as top_types
 from opentrons.util import linal
 from functools import lru_cache
-from opentrons.config import robot_configs
+from opentrons.config import robot_configs, feature_flags as ff
 from opentrons.config.types import RobotConfig
 
 from .util import (
@@ -46,9 +46,21 @@ PipetteHandlingData = Tuple[Pipette, top_types.Mount]
 
 
 class PauseManager:
-    def __init__(self):
-        self.queue = {}
-        self.is_paused = False
+    def __init__(self, door_state: DoorState) -> None:
+        self.queue: dict[str, PauseType] = {}
+        self._is_door_blocking = self._evaluate_door_state(door_state)
+        self.is_paused: bool = False
+
+    def _evaluate_door_state(self, door_state) -> bool:
+        if ff.enable_door_safety_switch():
+            return door_state is DoorState.OPEN
+        return False
+
+    def set_door(self, door_state):
+        self._is_door_blocking = self._evaluate_door_state(door_state)
+        if self._is_door_blocking:
+            self.pause(PauseEvent(
+                pause_type=PauseType.APP, msg="Close door before resuming"))
 
     def resume(self, name):
         if name in self.queue.keys():
@@ -110,7 +122,7 @@ class API(HardwareAPILike):
         self._motion_lock = asyncio.Lock(loop=self._loop)
         self._door_state = DoorState.CLOSED
         self._robot_calibration = rb_cal.load()
-        self._pause_manager = PauseManager()
+        self._pause_manager = PauseManager(self._door_state)
 
     @property
     def robot_calibration(self) -> rb_cal.RobotCalibration:
@@ -137,6 +149,7 @@ class API(HardwareAPILike):
         mod_log.info(
             f'Updating the window switch status: {door_state}')
         self.door_state = door_state
+        self.pause_manager.set_door(door_state)
         for cb in self._callbacks:
             hw_event = DoorStateNotification(
                 new_state=door_state)
