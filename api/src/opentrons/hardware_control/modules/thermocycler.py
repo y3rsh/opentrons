@@ -27,8 +27,6 @@ MODULE_LOG = logging.getLogger(__name__)
 POLLING_FREQUENCY_SEC = 1.0
 SIM_POLLING_FREQUENCY_SEC = 0.001
 
-HOLD_TIME_FUZZY_SECONDS = POLLING_FREQUENCY_SEC * 5
-
 TEMP_UPDATE_RETRIES = 50
 
 
@@ -62,7 +60,7 @@ class Thermocycler(mod_abc.AbstractModule):
                   interrupt_callback=interrupt_callback,
                   loop=loop,
                   execution_manager=execution_manager,
-                  polling_interval=polling_frequency)
+                  polling_interval_sec=polling_frequency)
         return mod
 
     def __init__(self,
@@ -73,7 +71,7 @@ class Thermocycler(mod_abc.AbstractModule):
                  device_info: Dict[str, str],
                  interrupt_callback: types.InterruptCallback = None,
                  loop: asyncio.AbstractEventLoop = None,
-                 polling_interval: float = POLLING_FREQUENCY_SEC
+                 polling_interval_sec: float = POLLING_FREQUENCY_SEC
                  ) -> None:
         """
         Constructor
@@ -86,7 +84,7 @@ class Thermocycler(mod_abc.AbstractModule):
             device_info: The thermocycler device info.
             interrupt_callback: Optional interrupt callback.
             loop: Optional loop.
-            polling_interval: How often to poll thermocycler for status
+            polling_interval_sec: How often to poll thermocycler for status
         """
         super().__init__(port=port,
                          usb_port=usb_port,
@@ -96,9 +94,10 @@ class Thermocycler(mod_abc.AbstractModule):
         self._device_info = device_info
         self._listener = ThermocyclerListener(interrupt_callback=interrupt_callback)
         self._poller = Poller(
-            interval_seconds=polling_interval, listener=self._listener,
+            interval_seconds=polling_interval_sec, listener=self._listener,
             reader=PollerReader(driver=self._driver)
         )
+        self._hold_time_fuzzy_seconds = polling_interval_sec * 5
         self._interrupt_cb = interrupt_callback
 
         self._total_cycle_count: Optional[int] = None
@@ -167,7 +166,7 @@ class Thermocycler(mod_abc.AbstractModule):
         hold_time = self.hold_time
         if hold_time is None:
             return False
-        lower_bound = max(0.0, new_hold_time - HOLD_TIME_FUZZY_SECONDS)
+        lower_bound = max(0.0, new_hold_time - self._hold_time_fuzzy_seconds)
         return lower_bound <= hold_time <= new_hold_time
 
     async def set_temperature(
@@ -288,13 +287,13 @@ class Thermocycler(mod_abc.AbstractModule):
         if self.is_simulated:
             return
 
-        # If hold time is within the HOLD_TIME_FUZZY_SECONDS time gap, then,
+        # If hold time is within the _hold_time_fuzzy_seconds time gap, then,
         # because of the driver's status poller delays, it is impossible to
         # know for certain if self.hold_time holds the most recent value.
         # So instead of counting on the cached self.hold_time, it is better to
         # just wait for hold_time time. (Skip if hold_time = 0 since we don't
         # want to wait in that case. Cached self.hold_time would be 0 anyway)
-        if 0 < hold_time <= HOLD_TIME_FUZZY_SECONDS:
+        if 0 < hold_time <= self._hold_time_fuzzy_seconds:
             await asyncio.sleep(hold_time)
         else:
             while self.hold_time != 0:
