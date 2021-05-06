@@ -32,15 +32,16 @@ class TempDeck(mod_abc.AbstractModule):
                     interrupt_callback: types.InterruptCallback = None,
                     simulating: bool = False,
                     loop: asyncio.AbstractEventLoop = None,
-                    sim_model: str = None):
+                    sim_model: str = None,
+                    polling_frequency: Optional[float] = None):
         """Build a TempDeck"""
         driver: AbstractTempDeckDriver
         if not simulating:
             driver = await TempDeckDriver.create(port=port)
-            polling_frequency = SIM_TEMP_POLL_INTERVAL_SECS
+            polling_frequency = polling_frequency or TEMP_POLL_INTERVAL_SECS
         else:
             driver = SimulatingDriver(sim_model=sim_model)
-            polling_frequency = TEMP_POLL_INTERVAL_SECS
+            polling_frequency = polling_frequency or SIM_TEMP_POLL_INTERVAL_SECS
 
         mod = cls(port=port,
                   usb_port=usb_port,
@@ -128,14 +129,14 @@ class TempDeck(mod_abc.AbstractModule):
 
         await self.wait_for_is_running()
 
-        while (
-                self.status == TemperatureStatus.HEATING and
-                self.temperature < awaiting_temperature
-        ) or (
-                self.status == TemperatureStatus.COOLING and
-                self.temperature > awaiting_temperature
-        ):
-            await self.wait_next_poll()
+        if self.status == TemperatureStatus.HEATING:
+            while self.temperature < awaiting_temperature:
+                await self.wait_next_poll()
+        elif self.status == TemperatureStatus.COOLING:
+            while self.temperature > awaiting_temperature:
+                await self.wait_next_poll()
+
+        return
 
     async def deactivate(self):
         """ Stop heating/cooling and turn off the fan """

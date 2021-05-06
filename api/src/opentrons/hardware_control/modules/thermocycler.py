@@ -42,16 +42,17 @@ class Thermocycler(mod_abc.AbstractModule):
                     interrupt_callback: types.InterruptCallback = None,
                     simulating: bool = False,
                     loop: asyncio.AbstractEventLoop = None,
-                    sim_model: str = None):
+                    sim_model: str = None,
+                    polling_frequency: Optional[float] = None):
         """Build and connect to a Thermocycler
         """
         driver: AbstractThermocyclerDriver
         if not simulating:
             driver = await ThermocyclerDriver.create(port=port)
-            polling_frequency = POLLING_FREQUENCY_SEC
+            polling_frequency = polling_frequency or POLLING_FREQUENCY_SEC
         else:
             driver = SimulatingDriver()
-            polling_frequency = SIM_POLLING_FREQUENCY_SEC
+            polling_frequency = polling_frequency or SIM_POLLING_FREQUENCY_SEC
 
         mod = cls(port=port,
                   usb_port=usb_port,
@@ -206,23 +207,23 @@ class Thermocycler(mod_abc.AbstractModule):
             volume=volume)
 
         retries = 0
-        while self.target != temperature or not self.hold_time_probably_set(hold_time):
+        while self.target != temperature \
+                or not self.hold_time_probably_set(hold_time):
             # Wait for the poller to update
             await self.wait_next_poll()
             retries += 1
             if retries > TEMP_UPDATE_RETRIES:
-                raise ThermocyclerError(f'Thermocycler driver set the block '
-                                        f'temp to T={temperature} & H={hold_time} '
-                                        f'but status reads '
-                                        f'T={self.target} & '
-                                        f'H={self.hold_time}')
+                raise ThermocyclerError(
+                    f'Thermocycler driver set the block temp to '
+                    f'T={temperature} & H={hold_time} but status reads '
+                    f'T={self.target} & H={self.hold_time}')
 
         if hold_time:
             task = self._loop.create_task(
-                self.wait_for_hold(hold_time))
+                self._wait_for_hold(hold_time))
         else:
             task = self._loop.create_task(
-                self.wait_for_temp())
+                self._wait_for_temp())
         await self.make_cancellable(task)
         await task
 
@@ -255,11 +256,21 @@ class Thermocycler(mod_abc.AbstractModule):
         """ Set the lid temperature in deg Celsius """
         await self.wait_for_is_running()
         await self._driver.set_lid_temperature(temp=temperature)
-        task = self._loop.create_task(self.wait_for_lid_temp())
+        # Wait for target to be set
+        retries = 0
+        while self.lid_target != temperature:
+            # Wait for the poller to update
+            await self.wait_next_poll()
+            retries += 1
+            if retries > TEMP_UPDATE_RETRIES:
+                raise ThermocyclerError(
+                    f'Thermocycler driver set the lid temp to T={temperature}'
+                    f'but status reads T={self.lid_target}')
+        task = self._loop.create_task(self._wait_for_lid_temp())
         await self.make_cancellable(task)
         await task
 
-    async def wait_for_lid_temp(self):
+    async def _wait_for_lid_temp(self):
         """
         This method only exits if lid target temperature has been reached.
 
@@ -271,7 +282,7 @@ class Thermocycler(mod_abc.AbstractModule):
         while self._listener.lid_status != TemperatureStatus.HOLDING:
             await self._listener.wait_next_poll()
 
-    async def wait_for_temp(self):
+    async def _wait_for_temp(self):
         """
         This method only exits if set temperature has been reached.
 
@@ -280,7 +291,7 @@ class Thermocycler(mod_abc.AbstractModule):
         while self._listener.plate_status != TemperatureStatus.HOLDING:
             await self.wait_next_poll()
 
-    async def wait_for_hold(self, hold_time: float = 0) -> None:
+    async def _wait_for_hold(self, hold_time: float = 0) -> None:
         """
         This method returns only when hold time has elapsed
         """
@@ -333,7 +344,7 @@ class Thermocycler(mod_abc.AbstractModule):
         return self._listener.state.plate_temperature.current if self._listener.state else None
 
     @property
-    def target(self) ->Optional[float]:
+    def target(self) -> Optional[float]:
         return self._listener.state.plate_temperature.target if self._listener.state else None
 
     @property
@@ -434,7 +445,7 @@ class Thermocycler(mod_abc.AbstractModule):
             for step_idx, step in enumerate(steps):
                 self._current_step_index = step_idx + 1  # science starts at 1
                 await self._execute_cycle_step(step, volume)
-                await self.wait_for_hold()
+                await self._wait_for_hold()
 
 
 @dataclass

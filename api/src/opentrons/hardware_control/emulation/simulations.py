@@ -11,18 +11,14 @@ class Temperature(Simulation):
     always moving towards the target.
     """
 
-    def __init__(self, percent_per_tick: float, close_enough: float,
-                 current: float) -> None:
+    def __init__(self, per_tick: float, current: float) -> None:
         """Construct a temperature simulation.
 
         Args:
-            percent_per_tick: what percent of the difference between target
-                and current to move each tick.
-            close_enough: how close to target is considered close enough
+            per_tick: amount to move per tick,
             current: the starting temperature
         """
-        self._percent_per_tick = percent_per_tick
-        self._close_enough = close_enough
+        self._per_tick = per_tick
         self._current = current
         self._target: Optional[float] = None
 
@@ -31,14 +27,13 @@ class Temperature(Simulation):
             return
 
         diff = self._target - self._current
-        abs_diff = abs(diff)
 
-        m = self._close_enough if abs_diff < self._close_enough else abs_diff * self._close_enough
-
-        if diff > 0:
-            self._current += m
+        if abs(diff) < self._per_tick:
+            self._current = self._target
+        elif diff > 0:
+            self._current += self._per_tick
         else:
-            self._current -= m
+            self._current -= self._per_tick
 
     def set_target(self, target: float) -> None:
         self._target = target
@@ -59,19 +54,16 @@ class TemperatureWithHold(Temperature):
      When the current temperature is within close enough from target the hold time
      decrements once per tick.
     """
-    def __init__(self, percent_per_tick: float, close_enough: float,
-                 current: float) -> None:
+    def __init__(self, per_tick: float, current: float) -> None:
         """Construct a temperature with hold simulation."""
-        super().__init__(percent_per_tick=percent_per_tick,
-                         close_enough=close_enough, current=current)
+        super().__init__(per_tick=per_tick, current=current)
         self._total_hold: Optional[float] = None
         self._hold: Optional[float] = None
 
     def tick(self) -> None:
         super().tick()
-        if self.target is not None and self._hold is not None:
-            if abs(self.target - self.current) < self._close_enough:
-                self._hold = max(0, self._hold - 1)
+        if self.target == self._current and self._hold is not None:
+            self._hold = max(0, self._hold - 1)
 
     def set_hold(self, hold: float) -> None:
         self._total_hold = hold

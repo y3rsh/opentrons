@@ -15,40 +15,105 @@ async def tempdeck(loop: asyncio.BaseEventLoop, emulation_app) -> TempDeck:
         execution_manager=execution_manager,
         usb_port=USBPort(name="", port_number=1, sub_names=[], device_path="",
                          hub=1),
-        loop=loop
+        loop=loop,
+        polling_frequency=.001
     )
     yield td
     await execution_manager.cancel()
+    await td._poller.stop_and_wait()
 
 
 def test_device_info(tempdeck) -> None:
+    """It should have the device info."""
     assert {'model': 'temp_emulator', 'serial': 'fake_serial',
             'version': '1'} == tempdeck.device_info
 
 
-async def test_cycle(tempdeck) -> None:
+async def test_set_temperature(tempdeck) -> None:
+    """It should set the temperature and return when target is reached."""
+    await tempdeck.wait_next_poll()
     assert tempdeck.live_data == {
         'status': "idle",
         'data': {
-            'currentTemp': 25,
+            'currentTemp': 0,
             'targetTemp': None
         }
     }
 
     await tempdeck.set_temperature(10)
     # Wait for poll
-    await tempdeck._listener.wait_next_poll()
+    await tempdeck.wait_next_poll()
     assert tempdeck.live_data == {
-            'status': "holding at target",
-            'data': {
-                'currentTemp': 10,
-                'targetTemp': 10
-            }
+        'status': "holding at target",
+        'data': {
+            'currentTemp': 10,
+            'targetTemp': 10
         }
+    }
 
-    await tempdeck.deactivate()
+
+async def test_start_set_temperature_cool(tempdeck) -> None:
+    """It should set the temperature and return and wait for temperature."""
+    await tempdeck.wait_next_poll()
+    current = tempdeck.temperature
+    new_temp = current - 20
+
+    await tempdeck.start_set_temperature(new_temp)
     # Wait for poll
-    await tempdeck._listener.wait_next_poll()
+    await tempdeck.wait_next_poll()
+    assert tempdeck.live_data == {
+        'status': "cooling",
+        'data': {
+            'currentTemp': current,
+            'targetTemp': new_temp
+        }
+    }
+
+    # Wait for temperature to be reached
+    await tempdeck.await_temperature(awaiting_temperature=new_temp)
+    assert tempdeck.live_data == {
+        'status': "holding at target",
+        'data': {
+            'currentTemp': new_temp,
+            'targetTemp': new_temp
+        }
+    }
+
+
+async def test_start_set_temperature_heat(tempdeck) -> None:
+    """It should set the temperature and return and wait for temperature."""
+    await tempdeck.wait_next_poll()
+    current = tempdeck.temperature
+    new_temp = current + 20
+
+    await tempdeck.start_set_temperature(new_temp)
+    # Wait for poll
+    await tempdeck.wait_next_poll()
+    assert tempdeck.live_data == {
+        'status': "heating",
+        'data': {
+            'currentTemp': current,
+            'targetTemp': new_temp
+        }
+    }
+
+    # Wait for temperature to be reached
+    await tempdeck.await_temperature(awaiting_temperature=new_temp)
+    assert tempdeck.live_data == {
+        'status': "holding at target",
+        'data': {
+            'currentTemp': new_temp,
+            'targetTemp': new_temp
+        }
+    }
+
+
+async def test_deactivate(tempdeck) -> None:
+    """It should deactivate and move to room temperature"""
+    await tempdeck.deactivate()
+    await tempdeck.wait_next_poll()
+    # Wait for temperature to be reached
+    await tempdeck.await_temperature(awaiting_temperature=23)
     assert tempdeck.live_data == {
         'status': "holding at target",
         'data': {
@@ -56,4 +121,3 @@ async def test_cycle(tempdeck) -> None:
             'targetTemp': 23
         }
     }
-    await tempdeck._poller.stop_and_wait()
