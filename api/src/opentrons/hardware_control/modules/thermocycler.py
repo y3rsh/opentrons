@@ -206,6 +206,7 @@ class Thermocycler(mod_abc.AbstractModule):
             hold_time=hold_time,
             volume=volume)
 
+        # Wait for target temperature to be set.
         retries = 0
         while self.target != temperature \
                 or not self.hold_time_probably_set(hold_time):

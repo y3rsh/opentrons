@@ -5,13 +5,17 @@ from opentrons.drivers.types import Temperature, PlateTemperature, ThermocyclerL
 
 
 class SimulatingDriver(AbstractThermocyclerDriver):
+    DEFAULT_TEMP = 23
 
     def __init__(self):
-        self._target_temp: Optional[float] = None
         self._ramp_rate: Optional[float] = None
-        self._hold_time: Optional[float] = None
         self._lid_status = ThermocyclerLidStatus.OPEN
-        self._lid_target: Optional[float] = None
+        self._lid_temperature = Temperature(
+            current=self.DEFAULT_TEMP, target=None
+        )
+        self._plate_temperature = PlateTemperature(
+            current=self.DEFAULT_TEMP, target=None, hold=None
+        )
 
     async def connect(self) -> None:
         pass
@@ -32,43 +36,35 @@ class SimulatingDriver(AbstractThermocyclerDriver):
         return self._lid_status
 
     async def get_lid_temperature(self) -> Temperature:
-        current = 0 if self._lid_target is None else self._lid_target
-        return Temperature(current=current, target=self._lid_target)
+        return self._lid_temperature
 
     async def set_plate_temperature(self, temp: float,
                                     hold_time: Optional[float] = None,
                                     volume: Optional[float] = None) -> None:
-        self._target_temp = temp
-        self._hold_time = hold_time
+        self._plate_temperature.target = temp
+        self._plate_temperature.current = temp
+        self._plate_temperature.hold = hold_time
 
     async def get_plate_temperature(self) -> PlateTemperature:
-        current = 0 if self._target_temp is None else self._target_temp
-        return PlateTemperature(
-            current=current, target=self._target_temp, hold=self._hold_time)
+        return self._plate_temperature
 
     async def set_ramp_rate(self, ramp_rate: float) -> None:
         self._ramp_rate = ramp_rate
 
-    async def set_temperature(self,
-                              temp: float,
-                              hold_time: float = None,
-                              ramp_rate: float = None,
-                              volume: float = None) -> None:
-        self._target_temp = temp
-        self._hold_time = hold_time
-        self._ramp_rate = ramp_rate
-
-    async def set_lid_temperature(self, temp: Optional[float]):
+    async def set_lid_temperature(self, temp: float) -> None:
         """ Set the lid temperature in deg Celsius """
-        self._lid_target = temp
+        self._lid_temperature.target = temp
+        self._lid_temperature.current = temp
 
     async def deactivate_lid(self):
-        self._lid_target = None
+        self._lid_temperature.target = None
+        self._lid_temperature.current = self.DEFAULT_TEMP
 
     async def deactivate_block(self):
-        self._target_temp = None
+        self._plate_temperature.target = None
+        self._plate_temperature.current = self.DEFAULT_TEMP
+        self._plate_temperature.hold = None
         self._ramp_rate = None
-        self._hold_time = None
 
     async def deactivate_all(self):
         await self.deactivate_lid()

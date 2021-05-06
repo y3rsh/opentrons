@@ -62,7 +62,7 @@ async def test_sim_update(loop, usb_port):
     assert temp.status == 'holding at target'
     await temp.deactivate()
     await temp.wait_next_poll()
-    assert temp.temperature == 0
+    assert temp.temperature == 23
     assert temp.target is None
     assert temp.status == 'idle'
 

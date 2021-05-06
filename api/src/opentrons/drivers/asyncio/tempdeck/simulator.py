@@ -24,7 +24,7 @@ class SimulatingDriver(AbstractTempDeckDriver):
         return self._temp
 
     async def deactivate(self):
-        self._temp = Temperature(target=None, current=0)
+        self._temp = Temperature(target=None, current=23)
 
     async def connect(self):
         pass
