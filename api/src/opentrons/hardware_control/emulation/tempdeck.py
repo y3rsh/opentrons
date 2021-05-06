@@ -40,14 +40,11 @@ class TempDeckEmulator(AbstractEmulator):
             self._temperature.tick()
             return res
         elif command.gcode == GCODE.SET_TEMP:
-            self._set_target(command.params['S'])
+            self._temperature.set_target(command.params['S'])
         elif command.gcode == GCODE.DISENGAGE:
-            self._set_target(util.TEMPERATURE_ROOM)
+            self._temperature.deactivate(util.TEMPERATURE_ROOM)
         elif command.gcode == GCODE.DEVICE_INFO:
             return f"serial:{SERIAL} model:{MODEL} version:{VERSION}"
         elif command.gcode == GCODE.PROGRAMMING_MODE:
             pass
         return None
-
-    def _set_target(self, target_temp: float) -> None:
-        self._temperature.set_target(target_temp)

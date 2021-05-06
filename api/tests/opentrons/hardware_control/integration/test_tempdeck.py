@@ -115,9 +115,9 @@ async def test_deactivate(tempdeck) -> None:
     # Wait for temperature to be reached
     await tempdeck.await_temperature(awaiting_temperature=23)
     assert tempdeck.live_data == {
-        'status': "holding at target",
+        'status': "idle",
         'data': {
             'currentTemp': 23,
-            'targetTemp': 23
+            'targetTemp': None
         }
     }

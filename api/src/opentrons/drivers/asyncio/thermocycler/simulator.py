@@ -63,13 +63,16 @@ class SimulatingDriver(AbstractThermocyclerDriver):
         self._lid_target = temp
 
     async def deactivate_lid(self):
-        pass
+        self._lid_target = None
 
     async def deactivate_block(self):
-        pass
+        self._target_temp = None
+        self._ramp_rate = None
+        self._hold_time = None
 
     async def deactivate_all(self):
-        pass
+        await self.deactivate_lid()
+        await self.deactivate_block()
 
     async def get_device_info(self):
         return {'serial': 'dummySerialTC',

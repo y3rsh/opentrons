@@ -57,7 +57,7 @@ async def test_lid_temperature(thermocycler: Thermocycler):
 
     await thermocycler.deactivate_lid()
     await thermocycler.wait_next_poll()
-    assert thermocycler.lid_target == 23
+    assert thermocycler.lid_target == None
 
 
 async def test_plate_temperature(thermocycler: Thermocycler):
@@ -73,7 +73,7 @@ async def test_plate_temperature(thermocycler: Thermocycler):
 
     await thermocycler.deactivate_block()
     await thermocycler.wait_next_poll()
-    assert thermocycler.target == 23
+    assert thermocycler.target == None
 
 
 async def test_cycle_temperatures(thermocycler: Thermocycler):

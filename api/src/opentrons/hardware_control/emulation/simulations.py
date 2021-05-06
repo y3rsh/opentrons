@@ -35,6 +35,11 @@ class Temperature(Simulation):
         else:
             self._current -= self._per_tick
 
+    def deactivate(self, temperature: float) -> None:
+        """Deactivate and reset to temperature"""
+        self._target = None
+        self._current = temperature
+
     def set_target(self, target: float) -> None:
         self._target = target
 

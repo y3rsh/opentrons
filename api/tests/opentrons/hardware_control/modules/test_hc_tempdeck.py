@@ -24,13 +24,14 @@ async def test_sim_initialization(loop, usb_port):
 
 
 async def test_sim_state(loop, usb_port):
-    temp = await modules.build(port='/dev/ot_module_sim_tempdeck0',
-                               usb_port=usb_port,
-                               which='tempdeck',
-                               simulating=True,
-                               interrupt_callback=lambda x: None,
-                               loop=loop,
-                               execution_manager=ExecutionManager(loop=loop))
+    temp = await modules.TempDeck.build(
+        port='/dev/ot_module_sim_tempdeck0',
+        usb_port=usb_port,
+        simulating=True,
+        interrupt_callback=lambda x: None,
+        loop=loop,
+        execution_manager=ExecutionManager(loop=loop)
+    )
     await temp.wait_next_poll()
     assert temp.temperature == 0
     assert temp.target is None
@@ -46,13 +47,15 @@ async def test_sim_state(loop, usb_port):
 
 
 async def test_sim_update(loop, usb_port):
-    temp = await modules.build(port='/dev/ot_module_sim_tempdeck0',
-                               usb_port=usb_port,
-                               which='tempdeck',
-                               simulating=True,
-                               interrupt_callback=lambda x: None,
-                               loop=loop,
-                               execution_manager=ExecutionManager(loop=loop))
+    temp = await modules.TempDeck.build(
+        port='/dev/ot_module_sim_tempdeck0',
+        usb_port=usb_port,
+        simulating=True,
+        interrupt_callback=lambda x: None,
+        loop=loop,
+        execution_manager=ExecutionManager(loop=loop),
+        polling_frequency=0
+    )
     await temp.set_temperature(10)
     assert temp.temperature == 10
     assert temp.target == 10
@@ -65,8 +68,15 @@ async def test_sim_update(loop, usb_port):
 
 
 async def test_revision_model_parsing(loop, usb_port):
-    mag = await modules.build('', 'tempdeck', True, usb_port, lambda x: None, loop=loop,
-                              execution_manager=ExecutionManager(loop=loop))
+    mag = await modules.TempDeck.build(
+        port='',
+        simulating=True,
+        usb_port=usb_port,
+        interrupt_callback=lambda x: None,
+        loop=loop,
+        execution_manager=ExecutionManager(loop=loop),
+        polling_frequency=0
+    )
     mag._device_info['model'] = 'temp_deck_v20'
     assert mag.model() == 'temperatureModuleV2'
     mag._device_info['model'] = 'temp_deck_v4.0'

@@ -82,12 +82,12 @@ class ThermocyclerEmulator(AbstractEmulator):
         elif command.gcode == GCODE.SET_RAMP_RATE:
             self.plate_ramp_rate.val = command.params['S']
         elif command.gcode == GCODE.DEACTIVATE_ALL:
-            self._plate_temperate.set_target(target=util.TEMPERATURE_ROOM)
-            self._lid_temperate.set_target(target=util.TEMPERATURE_ROOM)
+            self._plate_temperate.deactivate(temperature=util.TEMPERATURE_ROOM)
+            self._lid_temperate.deactivate(temperature=util.TEMPERATURE_ROOM)
         elif command.gcode == GCODE.DEACTIVATE_LID:
-            self._lid_temperate.set_target(target=util.TEMPERATURE_ROOM)
+            self._lid_temperate.deactivate(temperature=util.TEMPERATURE_ROOM)
         elif command.gcode == GCODE.DEACTIVATE_BLOCK:
-            self._plate_temperate.set_target(target=util.TEMPERATURE_ROOM)
+            self._plate_temperate.deactivate(temperature=util.TEMPERATURE_ROOM)
         elif command.gcode == GCODE.DEVICE_INFO:
             return f"serial:{SERIAL} model:{MODEL} version:{VERSION}"
         return None
