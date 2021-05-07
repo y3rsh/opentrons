@@ -143,24 +143,39 @@ def test_tempdeck(ctx_with_tempdeck, mock_module_controller):
     mod = ctx_with_tempdeck.load_module('Temperature Module', 1)
     assert ctx_with_tempdeck.deck[1] == mod._geometry
 
+
+def test_tempdeck_target(ctx_with_tempdeck, mock_module_controller):
+    mod = ctx_with_tempdeck.load_module('Temperature Module', 1)
     m = mock.PropertyMock(return_value=0x1337)
     type(mock_module_controller).target = m
     assert mod.target == 0x1337
 
+
+def test_tempdeck_set_temperature(ctx_with_tempdeck, mock_module_controller):
+    mod = ctx_with_tempdeck.load_module('Temperature Module', 1)
     mod.set_temperature(20)
     assert 'setting temperature' in ','.join(
         cmd.lower() for cmd in ctx_with_tempdeck.commands())
     mock_module_controller.set_temperature.assert_called_once_with(20)
 
+
+def test_tempdeck_temperature(ctx_with_tempdeck, mock_module_controller):
+    mod = ctx_with_tempdeck.load_module('Temperature Module', 1)
     m = mock.PropertyMock(return_value=0xdead)
     type(mock_module_controller).temperature = m
     assert mod.temperature == 0xdead
 
+
+def test_tempdeck_deactivate(ctx_with_tempdeck, mock_module_controller):
+    mod = ctx_with_tempdeck.load_module('Temperature Module', 1)
     mod.deactivate()
     assert 'deactivating temperature' in ','.join(
         cmd.lower() for cmd in ctx_with_tempdeck.commands())
     mock_module_controller.deactivate.assert_called_once()
 
+
+def test_tempdeck_status(ctx_with_tempdeck, mock_module_controller):
+    mod = ctx_with_tempdeck.load_module('Temperature Module', 1)
     m = mock.PropertyMock(return_value="some status")
     type(mock_module_controller).status = m
     assert mod.status == "some status"
@@ -170,41 +185,73 @@ def test_magdeck(ctx_with_magdeck, mock_module_controller):
     mod = ctx_with_magdeck.load_module('Magnetic Module', 1)
     assert ctx_with_magdeck.deck[1] == mod._geometry
 
+
+def test_magdeck_status(ctx_with_magdeck, mock_module_controller):
+    mod = ctx_with_magdeck.load_module('Magnetic Module', 1)
     m = mock.PropertyMock(return_value="disengaged")
     type(mock_module_controller).status = m
     assert mod.status == "disengaged"
 
+
+def test_magdeck_engage_no_height_no_labware(ctx_with_magdeck, mock_module_controller):
+    """It should raise an error."""
+    mod = ctx_with_magdeck.load_module('Magnetic Module', 1)
     with pytest.raises(ValueError):
         mod.engage()
 
+
+def test_magdeck_engage_with_height(ctx_with_magdeck, mock_module_controller):
+    mod = ctx_with_magdeck.load_module('Magnetic Module', 1)
     mod.engage(height=2)
     assert 'engaging magnetic' in ','.join(
         cmd.lower() for cmd in ctx_with_magdeck.commands())
     mock_module_controller.engage.assert_called_once_with(2)
-    mock_module_controller.engage.reset_mock()
 
+
+def test_magdeck_engage_with_height_from_base(
+        ctx_with_magdeck, mock_module_controller
+):
+    mod = ctx_with_magdeck.load_module('Magnetic Module', 1)
     mod.engage(height_from_base=2)
     mock_module_controller.engage.assert_called_once_with(7)
 
+
+def test_magdeck_disengage(
+        ctx_with_magdeck, mock_module_controller
+):
+    mod = ctx_with_magdeck.load_module('Magnetic Module', 1)
     mod.disengage()
     assert 'disengaging magnetic' in ','.join(
         cmd.lower() for cmd in ctx_with_magdeck.commands())
     mock_module_controller.deactivate.assert_called_once_with()
 
+
+def test_magdeck_calibrate(
+        ctx_with_magdeck, mock_module_controller
+):
+    mod = ctx_with_magdeck.load_module('Magnetic Module', 1)
     mod.calibrate()
     assert 'calibrating magnetic' in ','.join(
         cmd.lower() for cmd in ctx_with_magdeck.commands())
     mock_module_controller.calibrate.assert_called_once()
 
 
-def test_thermocycler_lid(ctx_with_thermocycler, mock_module_controller):
+def test_thermocycler(ctx_with_thermocycler, mock_module_controller):
     mod = ctx_with_thermocycler.load_module('thermocycler')
     assert ctx_with_thermocycler.deck[7] == mod._geometry
 
+
+def test_thermocycler_lid_status(ctx_with_thermocycler, mock_module_controller):
+    mod = ctx_with_thermocycler.load_module('thermocycler')
     m = mock.PropertyMock(return_value="open")
     type(mock_module_controller).lid_status = m
     assert mod.lid_position == 'open'
 
+
+def test_thermocycler_lid(
+        ctx_with_thermocycler, mock_module_controller
+):
+    mod = ctx_with_thermocycler.load_module('thermocycler')
     # Open should work if the lid is open (no status change)
     mock_module_controller.open.return_value = "open"
     mod.open_lid()
@@ -223,7 +270,17 @@ def test_thermocycler_lid(ctx_with_thermocycler, mock_module_controller):
     assert mod._geometry.highest_z == 98.0  # ignore 37.7mm lid for now
 
 
-def test_thermocycler_temp(ctx_with_thermocycler, mock_module_controller):
+def test_thermocycler_set_lid_temperature(
+        ctx_with_thermocycler, mock_module_controller
+):
+    mod = ctx_with_thermocycler.load_module('thermocycler')
+    mod.set_lid_temperature(123)
+    mock_module_controller.set_lid_temperature.assert_called_once_with(123)
+
+
+def test_thermocycler_temp_default_ramp_rate(
+        ctx_with_thermocycler, mock_module_controller
+):
     mod = ctx_with_thermocycler.load_module('thermocycler')
 
     # Test default ramp rate
@@ -234,8 +291,11 @@ def test_thermocycler_temp(ctx_with_thermocycler, mock_module_controller):
         temperature=20, hold_time_seconds=5.0, hold_time_minutes=1.0,
         ramp_rate=None, volume=None,
     )
-    mock_module_controller.set_temperature.reset_mock()
 
+def test_thermocycler_temp_specific_ramp_rate(
+        ctx_with_thermocycler, mock_module_controller
+):
+    mod = ctx_with_thermocycler.load_module('thermocycler')
     # Test specified ramp rate
     mod.set_block_temperature(41.3, hold_time_seconds=25.5, ramp_rate=2.0)
     assert 'setting thermocycler' in ','.join(
@@ -244,8 +304,12 @@ def test_thermocycler_temp(ctx_with_thermocycler, mock_module_controller):
         temperature=41.3, hold_time_seconds=25.5, hold_time_minutes=None,
         ramp_rate=2.0, volume=None,
     )
-    mock_module_controller.set_temperature.reset_mock()
 
+
+def test_thermocycler_temp_infinite_hold(
+        ctx_with_thermocycler, mock_module_controller
+):
+    mod = ctx_with_thermocycler.load_module('thermocycler')
     # Test infinite hold and volume
     mod.set_block_temperature(13.2, block_max_volume=123)
     assert 'setting thermocycler' in ','.join(
@@ -256,7 +320,9 @@ def test_thermocycler_temp(ctx_with_thermocycler, mock_module_controller):
     )
 
 
-def test_thermocycler_profile(ctx_with_thermocycler, mock_module_controller):
+def test_thermocycler_profile_invalid_repetitions(
+        ctx_with_thermocycler, mock_module_controller
+):
     mod = ctx_with_thermocycler.load_module('thermocycler')
 
     with pytest.raises(ValueError, match="positive integer"):
@@ -265,18 +331,33 @@ def test_thermocycler_profile(ctx_with_thermocycler, mock_module_controller):
                    {'temperature': 30, 'hold_time_seconds': 90}],
             repetitions=-1)
 
+
+def test_thermocycler_profile_no_temperature(
+        ctx_with_thermocycler, mock_module_controller
+):
+    mod = ctx_with_thermocycler.load_module('thermocycler')
     with pytest.raises(ValueError, match="temperature must be defined"):
         mod.execute_profile(
             steps=[{'temperature': 10, 'hold_time_seconds': 30},
                    {'hold_time_seconds': 90}],
             repetitions=5)
 
+
+def test_thermocycler_profile_no_hold(
+        ctx_with_thermocycler, mock_module_controller
+):
+    mod = ctx_with_thermocycler.load_module('thermocycler')
     with pytest.raises(ValueError, match="either hold_time_minutes or hold_time_seconds"):
         mod.execute_profile(
             steps=[{'temperature': 10, 'hold_time_seconds': 30},
                    {'temperature': 30}],
             repetitions=5)
 
+
+def test_thermocycler_profile(
+        ctx_with_thermocycler, mock_module_controller
+):
+    mod = ctx_with_thermocycler.load_module('thermocycler')
     mod.execute_profile(steps=[{'temperature': 10, 'hold_time_seconds': 30},
                                {'temperature': 30, 'hold_time_seconds': 90}],
                         repetitions=5,
