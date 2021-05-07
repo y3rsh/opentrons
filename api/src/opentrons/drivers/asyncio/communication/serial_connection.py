@@ -106,9 +106,11 @@ class SerialConnection:
             if self._ack in response:
                 # Remove ack from response
                 response = response.replace(self._ack, b'')
-                str_response = response.decode()
+                str_response = self._pre_process_response(
+                    command=data, response=response.decode()
+                )
                 self.raise_on_error(response=str_response)
-                return str_response.strip()
+                return str_response
 
             log.warning(f'{self.name}: retry number {retry}/{retries}')
 
@@ -165,3 +167,17 @@ class SerialConnection:
         await asyncio.sleep(self._retry_wait_time_seconds)
         await self._serial.close()
         await self._serial.open()
+
+    def _pre_process_response(self, command: str, response: str) -> str:
+        """
+        Opportunity for derived classes to pre-process response. Default strips
+        white space.
+
+        Args:
+            command: The sent command.
+            response: The raw read response minus ack.
+
+        Returns:
+            processed response.
+        """
+        return response.strip()
