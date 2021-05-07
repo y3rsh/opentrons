@@ -22,51 +22,66 @@ def ack() -> str:
 @pytest.fixture
 def subject(mock_serial_port: AsyncMock, ack: str) -> SerialConnection:
     """Create the test subject."""
-    # No need to sleep during retries.
     SerialConnection.RETRY_WAIT_TIME = 0
-    return SerialConnection(serial=mock_serial_port,
-                            ack=ack,
-                            name="name",
-                            port="port")
+    return SerialConnection(
+        serial=mock_serial_port,
+        ack=ack,
+        name="name",
+        port="port",
+        retry_wait_time_seconds=0
+    )
 
 
-async def test_send_command(mock_serial_port: AsyncMock,
-                            subject: SerialConnection,
-                            ack: str) -> None:
-    """It should send a command and return response."""
+async def test_send_command(
+        mock_serial_port: AsyncMock, subject: SerialConnection, ack: str
+) -> None:
+    """It should send a command."""
     serial_response = "response data " + ack
     mock_serial_port.read_until.return_value = serial_response.encode()
 
-    response = await subject.send_command(data="send data")
+    await subject.send_command(data="send data")
 
     mock_serial_port.write.assert_called_once_with(data=b"send data")
-    assert response == serial_response
     mock_serial_port.read_until.assert_called_once_with(match=ack.encode())
 
 
-async def test_send_command_with_retry(mock_serial_port: AsyncMock,
-                                       subject: SerialConnection,
-                                       ack: str) -> None:
+async def test_send_command_with_retry(
+        mock_serial_port: AsyncMock, subject: SerialConnection, ack: str
+) -> None:
     """It should retry sending after a read failure."""
     serial_response = "response data " + ack
     mock_serial_port.read_until.side_effect = (b"", serial_response.encode())
 
-    response = await subject.send_command(data="send data", retries=1)
+    await subject.send_command(data="send data", retries=1)
 
     mock_serial_port.write.assert_has_calls(
         calls=[call(data=b"send data"), call(data=b"send data")])
-    assert response == serial_response
     mock_serial_port.read_until.assert_has_calls(
         calls=[call(match=ack.encode()), call(match=ack.encode())])
 
 
-async def test_send_command_with_retry_exhausted(mock_serial_port: AsyncMock,
-                                                 subject: SerialConnection) -> None:
+async def test_send_command_with_retry_exhausted(
+        mock_serial_port: AsyncMock, subject: SerialConnection
+) -> None:
     """It should raise after retries exhausted."""
     mock_serial_port.read_until.side_effect = (b"", b"", b"")
 
     with pytest.raises(NoResponse):
         await subject.send_command(data="send data", retries=2)
+
+
+async def test_send_command_response(
+        mock_serial_port: AsyncMock,
+                            subject: SerialConnection,
+                            ack: str) -> None:
+    """It should return response without the ack and stripped."""
+    response_data = "response data"
+    serial_response = f" {response_data}  {ack}"
+    mock_serial_port.read_until.return_value = serial_response.encode()
+
+    response = await subject.send_command(data="send data")
+
+    assert response == response_data
 
 
 @pytest.mark.parametrize(

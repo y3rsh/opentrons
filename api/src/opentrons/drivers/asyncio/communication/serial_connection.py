@@ -25,8 +25,6 @@ class ErrorResponse(SerialException):
 
 class SerialConnection:
 
-    RETRY_WAIT_TIME = 0.1
-
     @classmethod
     async def create(
             cls,
@@ -34,7 +32,9 @@ class SerialConnection:
             baud_rate: int,
             timeout: int,
             ack: str,
-            name: Optional[str] = None) -> 'SerialConnection':
+            name: Optional[str] = None,
+            retry_wait_time_seconds: float = 0.1,
+    ) -> 'SerialConnection':
         """
         Create a connection.
 
@@ -44,25 +44,41 @@ class SerialConnection:
             timeout: timeout in seconds
             ack: the command response ack
             name: the connection name
+            retry_wait_time_seconds: how long to wait between retries.
 
         Returns: SerialConnection
         """
         serial = await AsyncSerial.create(port=port, baud_rate=baud_rate,
                                           timeout=timeout)
         name = name or port
-        return cls(serial=serial, port=port, name=name, ack=ack)
+        return cls(
+            serial=serial, port=port, name=name,
+            ack=ack, retry_wait_time_seconds=retry_wait_time_seconds
+        )
 
-    def __init__(self, serial: AsyncSerial, port: str, name: str, ack: str) -> None:
+    def __init__(
+            self,
+            serial: AsyncSerial,
+            port: str,
+            name: str,
+            ack: str,
+            retry_wait_time_seconds: float
+    ) -> None:
         """
         Constructor
 
         Args:
             serial: AsyncSerial object
+            port: url or port to connect to
+            ack: the command response ack
+            name: the connection name
+            retry_wait_time_seconds: how long to wait between retries.
         """
         self._serial = serial
         self._port = port
         self._name = name
         self._ack = ack.encode()
+        self._retry_wait_time_seconds = retry_wait_time_seconds
 
     async def send_command(
             self, data: str, retries: int = 0
@@ -79,27 +95,26 @@ class SerialConnection:
         Raises: SerialException
         """
         data_encode = data.encode()
-        log.debug(f'{self.name}: Write -> {data_encode!r}')
-        await self._serial.write(data=data_encode)
 
-        response = await self._serial.read_until(match=self._ack)
-        log.debug(f'{self.name}: Read <- {response!r}')
+        for retry in range(retries + 1):
+            log.debug(f'{self.name}: Write -> {data_encode!r}')
+            await self._serial.write(data=data_encode)
 
-        if self._ack in response:
-            response = response.replace(self._ack, b'')
-            str_response = response.decode()
-            self.raise_on_error(response=str_response)
-            return str_response
+            response = await self._serial.read_until(match=self._ack)
+            log.debug(f'{self.name}: Read <- {response!r}')
 
-        log.warning(f'{self.name}: retry number {retries}')
+            if self._ack in response:
+                # Remove ack from response
+                response = response.replace(self._ack, b'')
+                str_response = response.decode()
+                self.raise_on_error(response=str_response)
+                return str_response.strip()
 
-        retries -= 1
-        if retries < 0:
-            raise NoResponse("retry count exhausted")
+            log.warning(f'{self.name}: retry number {retry}/{retries}')
 
-        await self._on_retry()
+            await self._on_retry()
 
-        return await self.send_command(data=data, retries=retries)
+        raise NoResponse("retry count exhausted")
 
     async def open(self) -> None:
         """Open the connection."""
@@ -147,6 +162,6 @@ class SerialConnection:
 
         Returns: None
         """
-        await asyncio.sleep(self.RETRY_WAIT_TIME)
+        await asyncio.sleep(self._retry_wait_time_seconds)
         await self._serial.close()
         await self._serial.open()
