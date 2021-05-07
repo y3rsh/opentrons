@@ -5,8 +5,10 @@ from mock import AsyncMock, call
 
 from opentrons.drivers.asyncio.communication.async_serial import AsyncSerial
 from opentrons.drivers.asyncio.communication.serial_connection import (
-    SerialConnection, NoResponse, ErrorResponse, AlarmResponse
+    SerialConnection
 )
+from opentrons.drivers.asyncio.communication import NoResponse, AlarmResponse, \
+    ErrorResponse
 
 
 @pytest.fixture

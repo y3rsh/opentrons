@@ -32,8 +32,9 @@ from serial.serialutil import SerialException  # type: ignore
 
 from opentrons.config.types import RobotConfig
 from opentrons.config.robot_configs import current_for_revision
-from opentrons.drivers.asyncio.communication import SerialConnection, \
-    NoResponse, AlarmResponse, ErrorResponse
+from opentrons.drivers.asyncio.communication import (
+    SerialConnection, NoResponse, AlarmResponse, ErrorResponse
+)
 from opentrons.drivers.types import MoveSplits
 from opentrons.drivers.utils import (
     AxisMoveTimestamp, ParseError

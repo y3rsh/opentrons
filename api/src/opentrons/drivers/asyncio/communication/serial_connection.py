@@ -2,25 +2,10 @@ import asyncio
 import logging
 from typing import Optional
 
+from .errors import NoResponse, AlarmResponse, ErrorResponse
 from .async_serial import AsyncSerial
 
 log = logging.getLogger(__name__)
-
-
-class SerialException(Exception):
-    pass
-
-
-class NoResponse(SerialException):
-    pass
-
-
-class AlarmResponse(SerialException):
-    pass
-
-
-class ErrorResponse(SerialException):
-    pass
 
 
 class SerialConnection:
