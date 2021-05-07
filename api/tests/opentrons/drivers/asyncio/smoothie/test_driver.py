@@ -2,17 +2,12 @@ from copy import deepcopy
 
 from opentrons.drivers.asyncio.communication import AlarmResponse
 from opentrons.drivers.asyncio.smoothie import constants, parse_utils
-import opentrons.drivers.asyncio.smoothie.parse_utils
 from mock import AsyncMock
-from unittest.mock import Mock
 import pytest
 from opentrons.drivers.asyncio.smoothie.command_sender import \
     SmoothieCommandSender
 from opentrons.drivers.rpi_drivers.gpio_simulator import SimulatingGPIOCharDev
-from opentrons.drivers.types import MoveSplit
 
-from opentrons.config.robot_configs import (
-    DEFAULT_GANTRY_STEPS_PER_MM, DEFAULT_PIPETTE_CONFIGS)
 from opentrons.drivers.asyncio.smoothie import driver
 
 

@@ -11,21 +11,19 @@ from math import isclose
 
 from opentrons.drivers.asyncio.smoothie.command_sender import \
     SmoothieCommandSender
-from opentrons.drivers.asyncio.smoothie.constants import GCODE, HOMED_POSITION, \
-    Y_BOUND_OVERRIDE, SMOOTHIE_COMMAND_TERMINATOR, SMOOTHIE_ACK, \
-    PLUNGER_BACKLASH_MM, CURRENT_CHANGE_DELAY, PIPETTE_READ_DELAY, \
-    Y_SWITCH_BACK_OFF_MM, Y_SWITCH_REVERSE_BACK_OFF_MM, Y_BACKOFF_LOW_CURRENT, \
-    Y_BACKOFF_SLOW_SPEED, Y_RETRACT_SPEED, Y_RETRACT_DISTANCE, UNSTICK_DISTANCE, \
-    UNSTICK_SPEED, DEFAULT_AXES_SPEED, XY_HOMING_SPEED, HOME_SEQUENCE, AXES, \
-    DISABLE_AXES, SEC_PER_MIN, DEFAULT_ACK_TIMEOUT, DEFAULT_EXECUTE_TIMEOUT, \
-    DEFAULT_MOVEMENT_TIMEOUT, SMOOTHIE_BOOT_TIMEOUT, DEFAULT_STABILIZE_DELAY, \
+from opentrons.drivers.asyncio.smoothie.constants import (
+    GCODE, HOMED_POSITION, Y_BOUND_OVERRIDE, SMOOTHIE_COMMAND_TERMINATOR, SMOOTHIE_ACK,
+    PLUNGER_BACKLASH_MM, CURRENT_CHANGE_DELAY, PIPETTE_READ_DELAY,
+    Y_SWITCH_BACK_OFF_MM, Y_SWITCH_REVERSE_BACK_OFF_MM, Y_BACKOFF_LOW_CURRENT,
+    Y_BACKOFF_SLOW_SPEED, Y_RETRACT_SPEED, Y_RETRACT_DISTANCE, UNSTICK_DISTANCE,
+    UNSTICK_SPEED, DEFAULT_AXES_SPEED, XY_HOMING_SPEED, HOME_SEQUENCE, AXES,
+    DISABLE_AXES, SEC_PER_MIN, DEFAULT_ACK_TIMEOUT, DEFAULT_EXECUTE_TIMEOUT,
+    DEFAULT_MOVEMENT_TIMEOUT, SMOOTHIE_BOOT_TIMEOUT, DEFAULT_STABILIZE_DELAY,
     DEFAULT_COMMAND_RETRIES, MICROSTEPPING_GCODES, GCODE_ROUNDING_PRECISION
+)
 from opentrons.drivers.asyncio.smoothie.errors import SmoothieError, \
     SmoothieAlarm, TipProbeError
-from opentrons.drivers.asyncio.smoothie.parse_utils import \
-    parse_position_response, parse_instrument_data, \
-    byte_array_to_ascii_string, byte_array_to_hex_string, \
-    parse_switch_values, parse_homing_status_values
+from opentrons.drivers.asyncio.smoothie import parse_utils
 from opentrons.drivers.command_builder import CommandBuilder
 from opentrons.drivers.serial_communication import get_ports_by_name
 from serial.serialutil import SerialException  # type: ignore
@@ -229,7 +227,7 @@ class SmoothieDriver:
                 position_response = await self._send_command(
                     _command_builder().add_gcode(gcode=GCODE.CURRENT_POSITION)
                 )
-                return parse_position_response(position_response)
+                return parse_utils.parse_position_response(position_response)
             except ParseError as e:
                 retries -= 1
                 if retries <= 0:
@@ -453,7 +451,7 @@ class SmoothieDriver:
         res = await self._send_command(_command_builder().add_gcode(
             gcode=GCODE.LIMIT_SWITCH_STATUS
         ))
-        return parse_switch_values(res)
+        return parse_utils.parse_switch_values(res)
 
     async def update_homed_flags(
             self, flags: Dict[str, bool] = None):
@@ -467,13 +465,13 @@ class SmoothieDriver:
         if flags and isinstance(flags, dict):
             self.homed_flags.update(flags)
 
-        elif self.is_connected():
+        elif await self.is_connected():
 
             async def _recursive_update_homed_flags(retries: int):
                 try:
                     res = await self._send_command(
                         _command_builder().add_gcode(gcode=GCODE.HOMING_STATUS))
-                    flags = parse_homing_status_values(res)
+                    flags = parse_utils.parse_homing_status_values(res)
                     self.homed_flags.update(flags)
                 except ParseError as e:
                     retries -= 1
@@ -1090,11 +1088,11 @@ class SmoothieDriver:
                 _command_builder().add_gcode(gcode=gcode).add_element(allowed_mount),
                 suppress_error_msg=True)
             if res:
-                res = parse_instrument_data(res)
+                res = parse_utils.parse_instrument_data(res)
                 assert allowed_mount in res
                 # data is read/written as strings of HEX characters
                 # to avoid firmware weirdness in how it parses GCode arguments
-                return byte_array_to_ascii_string(res[allowed_mount])
+                return parse_utils.byte_array_to_ascii_string(res[allowed_mount])
         except (ParseError, AssertionError, SmoothieError):
             pass
         return None
@@ -1128,8 +1126,9 @@ class SmoothieDriver:
         await self.delay(CURRENT_CHANGE_DELAY)
         # data is read/written as strings of HEX characters
         # to avoid firmware weirdness in how it parses GCode arguments
-        byte_string = byte_array_to_hex_string(
-            bytearray(data_string.encode()))
+        byte_string = parse_utils.byte_array_to_hex_string(
+            bytearray(data_string.encode())
+        )
         command = _command_builder().add_gcode(
             gcode=gcode
         ).add_element(
