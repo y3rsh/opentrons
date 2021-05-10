@@ -11,7 +11,7 @@ from math import isclose
 
 from serial.serialutil import SerialException  # type: ignore
 
-from opentrons.drivers.asyncio.smoothie.command_sender import \
+from opentrons.drivers.asyncio.smoothie.connection import \
     SmoothieConnection
 from opentrons.drivers.asyncio.smoothie.constants import (
     GCODE, HOMED_POSITION, Y_BOUND_OVERRIDE, SMOOTHIE_COMMAND_TERMINATOR, SMOOTHIE_ACK,
@@ -362,7 +362,7 @@ class SmoothieDriver:
     async def is_connected(self) -> bool:
         if not self._connection:
             return False
-        return await self._connection.serial.is_open()
+        return await self._connection.is_open()
 
     async def _connect_to_port(self, port: str = None):
         try:

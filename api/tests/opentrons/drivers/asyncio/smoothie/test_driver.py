@@ -4,7 +4,7 @@ from opentrons.drivers.asyncio.communication import AlarmResponse
 from opentrons.drivers.asyncio.smoothie import constants, parse_utils
 from mock import AsyncMock
 import pytest
-from opentrons.drivers.asyncio.smoothie.command_sender import \
+from opentrons.drivers.asyncio.smoothie.connection import \
     SmoothieConnection
 from opentrons.drivers.rpi_drivers.gpio_simulator import SimulatingGPIOCharDev
 
@@ -64,8 +64,10 @@ async def test_update_position_retry(
     mock_connection.send_command.side_effect = [
         # first attempt to read, we get bad data
         'ok MCS: X:0.0000 Y:MISTAKE Z:0.0000 A:0.0000 B:0.0000 C:0.0000',
+        'ok',
         # following attempts to read, we get good data
-        'ok MCS: X:0.0000 Y:321.00 Z:0.0000 A:0.0000 B:0.0000 C:0.0000'
+        'ok MCS: X:0.0000 Y:321.00 Z:0.0000 A:0.0000 B:0.0000 C:0.0000',
+        'ok',
     ]
 
     await smoothie.update_position()
@@ -194,12 +196,18 @@ async def test_clear_limit_switch(smoothie: driver.SmoothieDriver, mock_connecti
         'M907 A0.1 B0.05 C0.05 X0.3 Y0.3 Z0.1 G4 P0.005 G0 C100.3 G0 C100',
         # recover from failure
         'M999',
+        'M400',
         'G28.6',
+        'M400',
         # set current for homing the failed axis (C)
         'M907 A0.1 B0.05 C0.05 X0.3 Y0.3 Z0.1 G4 P0.005 G28.2 C',
+        'M400',
         # set current back to idling after home
         'M907 A0.1 B0.05 C0.05 X0.3 Y0.3 Z0.1 G4 P0.005',
+        'M400',
         # update position
         'M114.2',
+        'M400',
         'M907 A0.1 B0.05 C0.05 X0.3 Y0.3 Z0.1 G4 P0.005',
+        'M400',
     ]

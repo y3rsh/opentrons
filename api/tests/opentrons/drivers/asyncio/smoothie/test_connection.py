@@ -4,7 +4,7 @@ from mock import AsyncMock, call
 from opentrons.drivers.asyncio.communication import SerialConnection, \
     AsyncSerial
 from opentrons.drivers.asyncio.smoothie import driver
-from opentrons.drivers.asyncio.smoothie.command_sender import SmoothieConnection
+from opentrons.drivers.asyncio.smoothie.connection import SmoothieConnection
 from opentrons.drivers.command_builder import CommandBuilder
 
 
