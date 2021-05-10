@@ -1557,7 +1557,7 @@ class SmoothieDriver:
                     builder=self._build_speed_command(self._combined_speed))
             )
 
-    def fast_home(self, axis, safety_margin):
+    async def fast_home(self, axis, safety_margin):
         """ home after a controlled motor stall
 
         Given a ktimen distance we have just stalled along an axis, move
@@ -1572,13 +1572,13 @@ class SmoothieDriver:
         # there is a chance the axis will hit it's home switch too soon
         # if this happens, catch the error and continue with homing afterwards
         try:
-            self.move(destination)
+            await self.move(destination)
         except SmoothieError:
             pass
 
         # then home once we're closer to the endstop(s)
         disabled = ''.join(ax for ax in AXES if ax not in axis.upper())
-        return self.home(axis=axis, disabled=disabled)
+        return await self.home(axis=axis, disabled=disabled)
 
     def unstick_axes(
             self, axes: str, distance: float = None, speed: float = None):

@@ -161,7 +161,6 @@ async def test_plunger_commands(subject: SmoothieDriver, spy: MagicMock):
 
 
 async def test_move_with_split(subject: SmoothieDriver, spy: MagicMock):
-    await subject._setup()
     await subject.home()
     spy.reset_mock()
 
@@ -221,9 +220,7 @@ async def test_move_with_split(subject: SmoothieDriver, spy: MagicMock):
 
 
 async def test_set_active_current(subject: SmoothieDriver, spy: MagicMock):
-    await subject._setup()
     await subject.home()
-
     spy.reset_mock()
 
     subject.set_active_current(
@@ -329,9 +326,6 @@ async def test_read_and_write_pipettes(subject: SmoothieDriver, spy: MagicMock):
 
 
 async def test_fast_home(subject: SmoothieDriver, spy: MagicMock):
-    await subject.home()
-    spy.reset_mock()
-
     await subject.fast_home(axis='X', safety_margin=12)
 
     command_log = [x.kwargs['data'].strip() for x in spy.call_args_list]
