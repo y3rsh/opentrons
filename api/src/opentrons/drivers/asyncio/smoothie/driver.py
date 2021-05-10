@@ -89,11 +89,13 @@ class SmoothieDriver:
         )
         gpio_chardev = gpio_chardev or SimulatingGPIOCharDev('simulated')
 
-        return cls(
+        instance = cls(
             config=config,
             connection=connection,
             gpio_chardev=gpio_chardev
         )
+        await instance._setup()
+        return instance
 
     def __init__(
             self,
@@ -484,7 +486,7 @@ class SmoothieDriver:
             self.set_speed(self._combined_speed)
 
     @staticmethod
-    def _build_speed_command(self, speed: float) -> CommandBuilder:
+    def _build_speed_command(speed: float) -> CommandBuilder:
         return _command_builder().add_gcode(
             gcode=GCODE.SET_SPEED
         ).add_int(prefix="F", value=int(float(speed) * SEC_PER_MIN))
