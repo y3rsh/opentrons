@@ -5,7 +5,7 @@ from opentrons.drivers.asyncio.smoothie import constants, parse_utils
 from mock import AsyncMock
 import pytest
 from opentrons.drivers.asyncio.smoothie.command_sender import \
-    SmoothieCommandSender
+    SmoothieConnection
 from opentrons.drivers.rpi_drivers.gpio_simulator import SimulatingGPIOCharDev
 
 from opentrons.drivers.asyncio.smoothie import driver
@@ -14,7 +14,7 @@ from opentrons.drivers.asyncio.smoothie import driver
 @pytest.fixture
 async def mock_connection() -> AsyncMock:
     """The mock SerialConnection."""
-    return AsyncMock(spec=SmoothieCommandSender)
+    return AsyncMock(spec=SmoothieConnection)
 
 
 @pytest.fixture

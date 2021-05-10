@@ -12,7 +12,7 @@ from math import isclose
 from serial.serialutil import SerialException  # type: ignore
 
 from opentrons.drivers.asyncio.smoothie.command_sender import \
-    SmoothieCommandSender
+    SmoothieConnection
 from opentrons.drivers.asyncio.smoothie.constants import (
     GCODE, HOMED_POSITION, Y_BOUND_OVERRIDE, SMOOTHIE_COMMAND_TERMINATOR, SMOOTHIE_ACK,
     PLUNGER_BACKLASH_MM, CURRENT_CHANGE_DELAY, PIPETTE_READ_DELAY,
@@ -80,7 +80,7 @@ class SmoothieDriver:
         Returns:
             A SmoothieDriver instance.
         """
-        connection = await SerialConnection.create(
+        connection = await SmoothieConnection.create(
             port=port,
             baud_rate=config.serial_speed,
             name='smoothie',
@@ -91,14 +91,14 @@ class SmoothieDriver:
 
         return cls(
             config=config,
-            connection=SmoothieCommandSender(connection=connection),
+            connection=connection,
             gpio_chardev=gpio_chardev
         )
 
     def __init__(
             self,
             config: RobotConfig,
-            connection: SmoothieCommandSender,
+            connection: SerialConnection,
             gpio_chardev: GPIODriverLike):
         """
         Constructor
@@ -840,10 +840,22 @@ class SmoothieDriver:
 
         """
         try:
-            return await self._connection.send_command(
+            command_result = await self._connection.send_command(
                 command=command,
                 retries=DEFAULT_COMMAND_RETRIES
             )
+
+            wait_command = CommandBuilder(
+                terminator=SMOOTHIE_COMMAND_TERMINATOR
+            ).add_gcode(
+                gcode=GCODE.WAIT
+            )
+
+            await self._connection.send_command(
+                command=wait_command,
+                retries=0
+            )
+            return command_result
         except AlarmResponse as e:
             self._handle_return(ret_code=str(e), is_alarm=True)
         except ErrorResponse as e:

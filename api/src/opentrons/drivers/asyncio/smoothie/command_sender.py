@@ -1,54 +1,20 @@
 import logging
 
 from opentrons.drivers.asyncio.communication import SerialConnection
-from opentrons.drivers.asyncio.smoothie.constants import GCODE, \
-    SMOOTHIE_COMMAND_TERMINATOR
-from opentrons.drivers.command_builder import CommandBuilder
 
 
 log = logging.getLogger(__name__)
 
 
-class SmoothieCommandSender:
-    def __init__(self, connection: SerialConnection):
-        """
-        Construct a smoothie command sender.
+class RemoveUnwantedCharactersMixin:
+    """Mixin that removes echoed command and other unwanted characters
+    from the response."""
 
-        Args:
-            connection: The connection to use.
-        """
-        self._connection = connection
-
-    async def send_command(self, command: CommandBuilder, retries: int = 0) -> str:
-        """
-        Send a command followed by a wait.
-        Args:
-            command: The command to send.
-            retries: The number of retries.
-
-        Returns: The command response.
-        """
-        cmd_str = command.build()
-        command_result = await self._connection.send_command(
-            data=cmd_str, retries=retries
+    def process_raw_response(self, command: str, response: str) -> str:
+        """Process the raw response."""
+        return self._remove_unwanted_characters(
+            command=command, response=response
         )
-
-        command_result = self._remove_unwanted_characters(
-            command=cmd_str, response=command_result
-        )
-
-        wait_command = CommandBuilder(
-            terminator=SMOOTHIE_COMMAND_TERMINATOR
-        ).add_gcode(
-            gcode=GCODE.WAIT
-        )
-
-        await self._connection.send_command(
-            data=wait_command.build(),
-            retries=0
-        )
-
-        return command_result
 
     @staticmethod
     def _remove_unwanted_characters(command: str, response: str) -> str:
@@ -60,6 +26,7 @@ class SmoothieCommandSender:
             # A single letter token cannot be assumed to be a command.
             # For example: "M369 L" response is "L:2132121212".
             return len(_s) > 1
+
         # Split at spaces.
         tokens = (c.strip() for c in command.strip().split(' '))
         # A list of commands to remove from response. Including the entire
@@ -82,3 +49,7 @@ class SmoothieCommandSender:
             log.debug(f'Newly formatted response: {modified_response}')
 
         return modified_response.strip()
+
+
+class SmoothieConnection(RemoveUnwantedCharactersMixin, SerialConnection):
+    pass

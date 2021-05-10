@@ -41,7 +41,7 @@ async def test_send_command(
     serial_response = "response data " + ack
     mock_serial_port.read_until.return_value = serial_response.encode()
 
-    await subject.send_command(data="send data")
+    await subject.send_data(data="send data")
 
     mock_serial_port.write.assert_called_once_with(data=b"send data")
     mock_serial_port.read_until.assert_called_once_with(match=ack.encode())
@@ -54,7 +54,7 @@ async def test_send_command_with_retry(
     serial_response = "response data " + ack
     mock_serial_port.read_until.side_effect = (b"", serial_response.encode())
 
-    await subject.send_command(data="send data", retries=1)
+    await subject.send_data(data="send data", retries=1)
 
     mock_serial_port.write.assert_has_calls(
         calls=[call(data=b"send data"), call(data=b"send data")])
@@ -69,7 +69,7 @@ async def test_send_command_with_retry_exhausted(
     mock_serial_port.read_until.side_effect = (b"", b"", b"")
 
     with pytest.raises(NoResponse):
-        await subject.send_command(data="send data", retries=2)
+        await subject.send_data(data="send data", retries=2)
 
 
 async def test_send_command_response(
@@ -81,7 +81,7 @@ async def test_send_command_response(
     serial_response = f" {response_data}  {ack}"
     mock_serial_port.read_until.return_value = serial_response.encode()
 
-    response = await subject.send_command(data="send data")
+    response = await subject.send_data(data="send data")
 
     assert response == response_data
 
@@ -106,7 +106,7 @@ def test_raise_on_error(response: str, exception_type: Type[Exception]) -> None:
 async def test_on_retry(mock_serial_port: AsyncMock,
                         subject: SerialConnection) -> None:
     """It should try to re-open connection."""
-    await subject._on_retry()
+    await subject.on_retry()
 
     mock_serial_port.close.assert_called_once()
     mock_serial_port.open.assert_called_once()

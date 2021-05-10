@@ -1,6 +1,10 @@
+from __future__ import annotations
+
 import asyncio
 import logging
 from typing import Optional
+
+from opentrons.drivers.command_builder import CommandBuilder
 
 from .errors import NoResponse, AlarmResponse, ErrorResponse
 from .async_serial import AsyncSerial
@@ -19,7 +23,7 @@ class SerialConnection:
             ack: str,
             name: Optional[str] = None,
             retry_wait_time_seconds: float = 0.1,
-    ) -> 'SerialConnection':
+    ) -> SerialConnection:
         """
         Create a connection.
 
@@ -66,14 +70,30 @@ class SerialConnection:
         self._retry_wait_time_seconds = retry_wait_time_seconds
 
     async def send_command(
-            self, data: str, retries: int = 0
+            self, command: CommandBuilder, retries: int = 0
     ) -> str:
         """
         Send a command and return the response.
 
         Args:
+            command: A command builder.
+            retries: number of times to retry in case of timeout
+
+        Returns: The command response
+
+        Raises: SerialException
+        """
+        return await self.send_data(data=command.build(), retries=retries)
+
+    async def send_data(
+            self, data: str, retries: int = 0
+    ) -> str:
+        """
+        Send data and return the response.
+
+        Args:
             data: The data to send.
-            retries: number of times to retry in case of failure
+            retries: number of times to retry in case of timeout
 
         Returns: The command response
 
@@ -91,7 +111,7 @@ class SerialConnection:
             if self._ack in response:
                 # Remove ack from response
                 response = response.replace(self._ack, b'')
-                str_response = self._on_raw_response(
+                str_response = self.process_raw_response(
                     command=data, response=response.decode()
                 )
                 self.raise_on_error(response=str_response)
@@ -99,7 +119,7 @@ class SerialConnection:
 
             log.warning(f'{self.name}: retry number {retry}/{retries}')
 
-            await self._on_retry()
+            await self.on_retry()
 
         raise NoResponse("retry count exhausted")
 
@@ -142,7 +162,7 @@ class SerialConnection:
         if "alarm" in lower:
             raise AlarmResponse(response)
 
-    async def _on_retry(self) -> None:
+    async def on_retry(self) -> None:
         """
         Opportunity for derived classes to perform action between retries. Default
         behaviour is to wait then re-open the connection.
@@ -153,7 +173,7 @@ class SerialConnection:
         await self._serial.close()
         await self._serial.open()
 
-    def _on_raw_response(self, command: str, response: str) -> str:
+    def process_raw_response(self, command: str, response: str) -> str:
         """
         Opportunity for derived classes to process the raw response. Default
          strips white space.
