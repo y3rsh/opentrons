@@ -41,7 +41,7 @@ from opentrons.drivers.utils import (
 from opentrons.drivers.rpi_drivers.gpio_simulator import SimulatingGPIOCharDev
 from opentrons.drivers.rpi_drivers.dev_types import GPIODriverLike
 from opentrons.system import smoothie_update
-from .types import CurrentSettings
+from .types import AxisCurrentSettings
 
 """
 - Driver is responsible for providing an interface for motion control
@@ -89,11 +89,13 @@ class SmoothieDriver:
         )
         gpio_chardev = gpio_chardev or SimulatingGPIOCharDev('simulated')
 
-        return cls(
+        instance = cls(
             config=config,
             connection=connection,
             gpio_chardev=gpio_chardev
         )
+        await instance._setup()
+        return instance
 
     def __init__(
             self,
@@ -126,13 +128,13 @@ class SmoothieDriver:
         # Current-Settings is the amperage each axis was last set to
         # Active-Current-Settings is set when an axis is moving/homing
         # Dwelling-Current-Settings is set when an axis is NOT moving/homing
-        self._current_settings = CurrentSettings(
+        self._current_settings = AxisCurrentSettings(
             val=current_for_revision(config.low_current, self._gpio_chardev.board_rev)
         )
-        self._active_current_settings = CurrentSettings(
+        self._active_current_settings = AxisCurrentSettings(
             val=current_for_revision(config.high_current, self._gpio_chardev.board_rev)
         )
-        self._dwelling_current_settings = CurrentSettings(
+        self._dwelling_current_settings = AxisCurrentSettings(
             val=current_for_revision(config.low_current, self._gpio_chardev.board_rev)
         )
 
@@ -484,7 +486,7 @@ class SmoothieDriver:
             self.set_speed(self._combined_speed)
 
     @staticmethod
-    def _build_speed_command(self, speed: float) -> CommandBuilder:
+    def _build_speed_command(speed: float) -> CommandBuilder:
         return _command_builder().add_gcode(
             gcode=GCODE.SET_SPEED
         ).add_int(prefix="F", value=int(float(speed) * SEC_PER_MIN))
@@ -1555,7 +1557,7 @@ class SmoothieDriver:
                     builder=self._build_speed_command(self._combined_speed))
             )
 
-    def fast_home(self, axis, safety_margin):
+    async def fast_home(self, axis, safety_margin):
         """ home after a controlled motor stall
 
         Given a ktimen distance we have just stalled along an axis, move
@@ -1570,13 +1572,13 @@ class SmoothieDriver:
         # there is a chance the axis will hit it's home switch too soon
         # if this happens, catch the error and continue with homing afterwards
         try:
-            self.move(destination)
+            await self.move(destination)
         except SmoothieError:
             pass
 
         # then home once we're closer to the endstop(s)
         disabled = ''.join(ax for ax in AXES if ax not in axis.upper())
-        return self.home(axis=axis, disabled=disabled)
+        return await self.home(axis=axis, disabled=disabled)
 
     def unstick_axes(
             self, axes: str, distance: float = None, speed: float = None):
@@ -1808,7 +1810,7 @@ class SmoothieDriver:
             # set smoothieware into programming mode
             self._smoothie_programming_mode()
             # close the port so other application can access it
-            await self._connection.serial.close()
+            await self._connection.close()
 
         # run lpc21isp, THIS WILL TAKE AROUND 1 MINUTE TO COMPLETE
         update_cmd = f'lpc21isp -wipe -donotstart {filename} ' \
@@ -1836,15 +1838,15 @@ class SmoothieDriver:
         else:
             log.info("Smoothie update complete")
         try:
-            await self._connection.serial.close()
+            await self._connection.close()
         except Exception:
             log.exception('Failed to close smoothie connection.')
         # re-open the port
-        await self._connection.serial.open()
+        await self._connection.open()
         # reset smoothieware
         self._smoothie_reset()
         # run setup gcodes
-        self._setup()
+        await self._setup()
 
         return out_b.decode().strip()
 

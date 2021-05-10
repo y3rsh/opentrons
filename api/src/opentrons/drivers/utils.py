@@ -72,7 +72,7 @@ def parse_plate_temperature_response(
         )
     except KeyError:
         raise ParseError(
-            error_message='Unexpected argument to parse_lid_temperature_response',
+            error_message='Unexpected argument to parse_plate_temperature_response',
             parse_source=temperature_string
         )
 

@@ -4,7 +4,7 @@ from opentrons.config.types import AxisDict
 
 
 @dataclass
-class CurrentSettings:
+class AxisCurrentSettings:
     now: AxisDict
     saved: AxisDict
 
