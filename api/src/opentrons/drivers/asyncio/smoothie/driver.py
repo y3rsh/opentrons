@@ -41,7 +41,7 @@ from opentrons.drivers.utils import (
 from opentrons.drivers.rpi_drivers.gpio_simulator import SimulatingGPIOCharDev
 from opentrons.drivers.rpi_drivers.dev_types import GPIODriverLike
 from opentrons.system import smoothie_update
-from .types import CurrentSettings
+from .types import AxisCurrentSettings
 
 """
 - Driver is responsible for providing an interface for motion control
@@ -128,13 +128,13 @@ class SmoothieDriver:
         # Current-Settings is the amperage each axis was last set to
         # Active-Current-Settings is set when an axis is moving/homing
         # Dwelling-Current-Settings is set when an axis is NOT moving/homing
-        self._current_settings = CurrentSettings(
+        self._current_settings = AxisCurrentSettings(
             val=current_for_revision(config.low_current, self._gpio_chardev.board_rev)
         )
-        self._active_current_settings = CurrentSettings(
+        self._active_current_settings = AxisCurrentSettings(
             val=current_for_revision(config.high_current, self._gpio_chardev.board_rev)
         )
-        self._dwelling_current_settings = CurrentSettings(
+        self._dwelling_current_settings = AxisCurrentSettings(
             val=current_for_revision(config.low_current, self._gpio_chardev.board_rev)
         )
 
@@ -1810,7 +1810,7 @@ class SmoothieDriver:
             # set smoothieware into programming mode
             self._smoothie_programming_mode()
             # close the port so other application can access it
-            await self._connection.serial.close()
+            await self._connection.close()
 
         # run lpc21isp, THIS WILL TAKE AROUND 1 MINUTE TO COMPLETE
         update_cmd = f'lpc21isp -wipe -donotstart {filename} ' \
@@ -1838,15 +1838,15 @@ class SmoothieDriver:
         else:
             log.info("Smoothie update complete")
         try:
-            await self._connection.serial.close()
+            await self._connection.close()
         except Exception:
             log.exception('Failed to close smoothie connection.')
         # re-open the port
-        await self._connection.serial.open()
+        await self._connection.open()
         # reset smoothieware
         self._smoothie_reset()
         # run setup gcodes
-        self._setup()
+        await self._setup()
 
         return out_b.decode().strip()
 
