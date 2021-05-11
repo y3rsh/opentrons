@@ -7,6 +7,8 @@
   or knowing anything about what the device is being used for
 """
 
+from __future__ import annotations
+
 import logging
 from typing import Dict
 from enum import Enum
@@ -45,7 +47,7 @@ class TempDeckError(Exception):
 class TempDeckDriver(AbstractTempDeckDriver):
 
     @classmethod
-    async def create(cls, port: str) -> 'TempDeckDriver':
+    async def create(cls, port: str) -> TempDeckDriver:
         """
         Create a temp deck driver.
 
@@ -71,15 +73,15 @@ class TempDeckDriver(AbstractTempDeckDriver):
 
     async def connect(self) -> None:
         """Connect to the temp deck."""
-        await self._connection.serial.open()
+        await self._connection.open()
 
     async def disconnect(self) -> None:
         """Disconnect from temp deck"""
-        await self._connection.serial.close()
+        await self._connection.close()
 
     async def is_connected(self) -> bool:
         """Check connected state"""
-        return await self._connection.serial.is_open()
+        return await self._connection.is_open()
 
     async def deactivate(self) -> None:
         """

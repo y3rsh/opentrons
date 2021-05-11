@@ -7,6 +7,8 @@
   or knowing anything about what the device is being used for
 """
 
+from __future__ import annotations
+
 import logging
 from typing import Dict
 from enum import Enum
@@ -51,7 +53,7 @@ class MagDeckError(Exception):
 class MagDeckDriver(AbstractMagDeckDriver):
 
     @classmethod
-    async def create(cls, port: str) -> 'MagDeckDriver':
+    async def create(cls, port: str) -> MagDeckDriver:
         """
         Create a mag deck driver.
 
@@ -77,15 +79,15 @@ class MagDeckDriver(AbstractMagDeckDriver):
 
     async def connect(self) -> None:
         """Connect to device"""
-        await self._connection.serial.open()
+        await self._connection.open()
 
     async def disconnect(self) -> None:
         """Disconnect from device"""
-        await self._connection.serial.close()
+        await self._connection.close()
 
     async def is_connected(self) -> bool:
         """Check if connected."""
-        return await self._connection.serial.is_open()
+        return await self._connection.is_open()
 
     async def home(self) -> None:
         """Homes the magnet"""

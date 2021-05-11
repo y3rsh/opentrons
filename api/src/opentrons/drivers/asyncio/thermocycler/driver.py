@@ -9,7 +9,9 @@ from opentrons.drivers.asyncio.communication import (
     SerialConnection, AsyncSerial
 )
 from opentrons.drivers.asyncio.thermocycler.abstract import AbstractThermocyclerDriver
-from opentrons.drivers.types import Temperature, PlateTemperature, ThermocyclerLidStatus
+from opentrons.drivers.types import (
+    Temperature, PlateTemperature, ThermocyclerLidStatus
+)
 
 log = logging.getLogger(__name__)
 
@@ -80,15 +82,15 @@ class ThermocyclerDriver(AbstractThermocyclerDriver):
 
     async def connect(self) -> None:
         """Connect to thermocycler"""
-        await self._connection.serial.open()
+        await self._connection.open()
 
     async def disconnect(self) -> None:
         """Disconnect from thermocycler"""
-        await self._connection.serial.close()
+        await self._connection.close()
 
     async def is_connected(self) -> bool:
         """Check connection"""
-        return await self._connection.serial.is_open()
+        return await self._connection.is_open()
 
     async def open_lid(self) -> None:
         """Send open lid command"""
@@ -248,4 +250,4 @@ class ThermocyclerDriver(AbstractThermocyclerDriver):
             self._connection.port, TC_BOOTLOADER_BAUDRATE, timeout=1)
         await asyncio.sleep(0.05)
         await trigger_connection.close()
-        await self._connection.serial.close()
+        await self._connection.close()
