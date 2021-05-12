@@ -859,9 +859,9 @@ class SmoothieDriver:
             )
             return command_result
         except AlarmResponse as e:
-            self._handle_return(ret_code=str(e), is_alarm=True)
+            self._handle_return(ret_code=e.response, is_alarm=True)
         except ErrorResponse as e:
-            self._handle_return(ret_code=str(e), is_error=True)
+            self._handle_return(ret_code=e.response, is_error=True)
 
     def _handle_return(
             self, ret_code: str, is_alarm: bool = False, is_error: bool = False

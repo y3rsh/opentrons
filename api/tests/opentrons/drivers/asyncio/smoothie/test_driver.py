@@ -177,7 +177,7 @@ async def test_clear_limit_switch(smoothie: driver.SmoothieDriver, mock_connecti
     def write_mock(command, retries):
         cmd_list.append(command.build())
         if constants.GCODE.MOVE in command:
-            raise AlarmResponse("ALARM: Hard limit +C")
+            raise AlarmResponse(port="", response="ALARM: Hard limit +C")
         elif constants.GCODE.CURRENT_POSITION in command:
             return 'ok M114.2 X:10 Y:20 Z:30 A:40 B:50 C:60'
         elif constants.GCODE.HOMING_STATUS in command:
