@@ -74,8 +74,8 @@ async def test_send_command_with_retry_exhausted(
 
 async def test_send_command_response(
         mock_serial_port: AsyncMock,
-                            subject: SerialConnection,
-                            ack: str) -> None:
+        subject: SerialConnection,
+        ack: str) -> None:
     """It should return response without the ack and stripped."""
     response_data = "response data"
     serial_response = f" {response_data}  {ack}"
@@ -97,10 +97,14 @@ async def test_send_command_response(
         ["This is an Alarm", AlarmResponse],
     ]
 )
-def test_raise_on_error(response: str, exception_type: Type[Exception]) -> None:
+def test_raise_on_error(
+        subject: SerialConnection,
+        response: str,
+        exception_type: Type[Exception]
+) -> None:
     """It should raise an exception on error/alarm responses."""
     with pytest.raises(expected_exception=exception_type, match=response):
-        SerialConnection.raise_on_error(response)
+        subject.raise_on_error(response)
 
 
 async def test_on_retry(mock_serial_port: AsyncMock,

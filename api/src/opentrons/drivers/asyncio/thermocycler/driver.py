@@ -99,8 +99,8 @@ class ThermocyclerDriver(AbstractThermocyclerDriver):
         ).add_gcode(
             gcode=GCODE.OPEN_LID
         )
-        await self._connection.send_data(
-            data=c.build(), retries=DEFAULT_COMMAND_RETRIES)
+        await self._connection.send_command(
+            command=c, retries=DEFAULT_COMMAND_RETRIES)
 
     async def close_lid(self) -> None:
         """Send close lid command"""
@@ -109,8 +109,8 @@ class ThermocyclerDriver(AbstractThermocyclerDriver):
         ).add_gcode(
             gcode=GCODE.CLOSE_LID
         )
-        await self._connection.send_data(
-            data=c.build(), retries=DEFAULT_COMMAND_RETRIES)
+        await self._connection.send_command(
+            command=c, retries=DEFAULT_COMMAND_RETRIES)
 
     async def get_lid_status(self) -> ThermocyclerLidStatus:
         """Send get lid status command"""
@@ -119,8 +119,8 @@ class ThermocyclerDriver(AbstractThermocyclerDriver):
         ).add_gcode(
             gcode=GCODE.GET_LID_STATUS
         )
-        response = await self._connection.send_data(
-            data=c.build(), retries=DEFAULT_COMMAND_RETRIES)
+        response = await self._connection.send_command(
+            command=c, retries=DEFAULT_COMMAND_RETRIES)
         return ThermocyclerLidStatus(utils.parse_key_values(value=response)['Lid'])
 
     async def set_lid_temperature(self, temp: float) -> None:
@@ -133,8 +133,8 @@ class ThermocyclerDriver(AbstractThermocyclerDriver):
         ).add_float(
             prefix="S", value=temp, precision=utils.TC_GCODE_ROUNDING_PRECISION
         )
-        await self._connection.send_data(
-            data=c.build(), retries=DEFAULT_COMMAND_RETRIES)
+        await self._connection.send_command(
+            command=c, retries=DEFAULT_COMMAND_RETRIES)
 
     async def get_lid_temperature(self) -> Temperature:
         """Send a get lid temperature command."""
@@ -143,8 +143,8 @@ class ThermocyclerDriver(AbstractThermocyclerDriver):
         ).add_gcode(
             gcode=GCODE.GET_LID_TEMP
         )
-        response = await self._connection.send_data(
-            data=c.build(), retries=DEFAULT_COMMAND_RETRIES
+        response = await self._connection.send_command(
+            command=c, retries=DEFAULT_COMMAND_RETRIES
         )
         return utils.parse_temperature_response(
             temperature_string=response, rounding_val=utils.TC_GCODE_ROUNDING_PRECISION)
@@ -171,8 +171,8 @@ class ThermocyclerDriver(AbstractThermocyclerDriver):
             c = c.add_float(prefix="V", value=volume,
                             precision=utils.TC_GCODE_ROUNDING_PRECISION)
 
-        await self._connection.send_data(
-            data=c.build(), retries=DEFAULT_COMMAND_RETRIES)
+        await self._connection.send_command(
+            command=c, retries=DEFAULT_COMMAND_RETRIES)
 
     async def get_plate_temperature(self) -> PlateTemperature:
         """Send a get plate temperature command."""
@@ -181,8 +181,8 @@ class ThermocyclerDriver(AbstractThermocyclerDriver):
         ).add_gcode(
             gcode=GCODE.GET_PLATE_TEMP
         )
-        response = await self._connection.send_data(
-            data=c.build(), retries=DEFAULT_COMMAND_RETRIES
+        response = await self._connection.send_command(
+            command=c, retries=DEFAULT_COMMAND_RETRIES
         )
         return utils.parse_plate_temperature_response(
             temperature_string=response,
@@ -198,8 +198,8 @@ class ThermocyclerDriver(AbstractThermocyclerDriver):
         ).add_float(
             prefix="S", value=ramp_rate, precision=utils.TC_GCODE_ROUNDING_PRECISION
         )
-        await self._connection.send_data(
-            data=c.build(), retries=DEFAULT_COMMAND_RETRIES)
+        await self._connection.send_command(
+            command=c, retries=DEFAULT_COMMAND_RETRIES)
 
     async def deactivate_all(self) -> None:
         """Send deactivate all command."""
@@ -208,8 +208,8 @@ class ThermocyclerDriver(AbstractThermocyclerDriver):
         ).add_gcode(
             gcode=GCODE.DEACTIVATE_ALL
         )
-        await self._connection.send_data(
-            data=c.build(), retries=DEFAULT_COMMAND_RETRIES)
+        await self._connection.send_command(
+            command=c, retries=DEFAULT_COMMAND_RETRIES)
 
     async def deactivate_lid(self) -> None:
         """Send deactivate lid command"""
@@ -218,8 +218,8 @@ class ThermocyclerDriver(AbstractThermocyclerDriver):
         ).add_gcode(
             gcode=GCODE.DEACTIVATE_LID
         )
-        await self._connection.send_data(
-            data=c.build(), retries=DEFAULT_COMMAND_RETRIES)
+        await self._connection.send_command(
+            command=c, retries=DEFAULT_COMMAND_RETRIES)
 
     async def deactivate_block(self) -> None:
         """Send deactivate block command"""
@@ -228,8 +228,8 @@ class ThermocyclerDriver(AbstractThermocyclerDriver):
         ).add_gcode(
             gcode=GCODE.DEACTIVATE_BLOCK
         )
-        await self._connection.send_data(
-            data=c.build(), retries=DEFAULT_COMMAND_RETRIES)
+        await self._connection.send_command(
+            command=c, retries=DEFAULT_COMMAND_RETRIES)
 
     async def get_device_info(self) -> Dict[str, str]:
         """Send get device info command"""
@@ -238,8 +238,8 @@ class ThermocyclerDriver(AbstractThermocyclerDriver):
         ).add_gcode(
             gcode=GCODE.DEVICE_INFO
         )
-        response = await self._connection.send_data(
-            data=c.build(), retries=DEFAULT_COMMAND_RETRIES)
+        response = await self._connection.send_command(
+            command=c, retries=DEFAULT_COMMAND_RETRIES)
         return utils.parse_device_information(
             device_info_string=response
         )

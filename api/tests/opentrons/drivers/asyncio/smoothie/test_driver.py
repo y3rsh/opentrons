@@ -1,5 +1,6 @@
 from copy import deepcopy
 
+from opentrons.drivers import utils
 from opentrons.drivers.asyncio.communication import AlarmResponse
 from opentrons.drivers.asyncio.smoothie import constants, parse_utils
 from mock import AsyncMock
@@ -119,7 +120,7 @@ async def test_functional(smoothie: driver.SmoothieDriver):
 
 
 async def test_read_pipette_v13(smoothie: driver.SmoothieDriver, mock_connection: AsyncMock):
-    mock_connection.send_command.return_value = 'L:' + parse_utils.byte_array_to_hex_string(b'p300_single_v13')
+    mock_connection.send_command.return_value = 'L:' + utils.string_to_hex("p300_single_v13")
     res = await smoothie.read_pipette_model('left')
     assert res == 'p300_single_v1.3'
 
@@ -177,7 +178,7 @@ async def test_clear_limit_switch(smoothie: driver.SmoothieDriver, mock_connecti
     def write_mock(command, retries):
         cmd_list.append(command.build())
         if constants.GCODE.MOVE in command:
-            raise AlarmResponse("ALARM: Hard limit +C")
+            raise AlarmResponse(port="", response="ALARM: Hard limit +C")
         elif constants.GCODE.CURRENT_POSITION in command:
             return 'ok M114.2 X:10 Y:20 Z:30 A:40 B:50 C:60'
         elif constants.GCODE.HOMING_STATUS in command:

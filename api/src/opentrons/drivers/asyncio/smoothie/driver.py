@@ -36,7 +36,7 @@ from opentrons.drivers.asyncio.communication import (
 )
 from opentrons.drivers.types import MoveSplits
 from opentrons.drivers.utils import (
-    AxisMoveTimestamp, ParseError
+    AxisMoveTimestamp, ParseError, string_to_hex
 )
 from opentrons.drivers.rpi_drivers.gpio_simulator import SimulatingGPIOCharDev
 from opentrons.drivers.rpi_drivers.dev_types import GPIODriverLike
@@ -859,9 +859,9 @@ class SmoothieDriver:
             )
             return command_result
         except AlarmResponse as e:
-            self._handle_return(ret_code=str(e), is_alarm=True)
+            self._handle_return(ret_code=e.response, is_alarm=True)
         except ErrorResponse as e:
-            self._handle_return(ret_code=str(e), is_error=True)
+            self._handle_return(ret_code=e.response, is_error=True)
 
     def _handle_return(
             self, ret_code: str, is_alarm: bool = False, is_error: bool = False
@@ -1121,9 +1121,7 @@ class SmoothieDriver:
         await self.delay(CURRENT_CHANGE_DELAY)
         # data is read/written as strings of HEX characters
         # to avoid firmware weirdness in how it parses GCode arguments
-        byte_string = parse_utils.byte_array_to_hex_string(
-            bytearray(data_string.encode())
-        )
+        byte_string = string_to_hex(val=data_string)
         command = _command_builder().add_gcode(
             gcode=gcode
         ).add_element(

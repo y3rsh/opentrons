@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import asyncio
 from concurrent.futures.thread import ThreadPoolExecutor
 from typing import Optional
@@ -9,7 +11,9 @@ class AsyncSerial:
     """Async wrapper around Serial."""
 
     @classmethod
-    async def create(cls, port: str, baud_rate: int, timeout: Optional[int] = None):
+    async def create(
+            cls, port: str, baud_rate: int, timeout: Optional[int] = None
+    ) -> AsyncSerial:
         """
         Create an AsyncSerial instance.
 

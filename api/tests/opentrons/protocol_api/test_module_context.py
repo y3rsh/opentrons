@@ -34,7 +34,7 @@ def ctx_with_tempdeck(
     def find_modules(resolved_model: ModuleModel, resolved_type: ModuleType):
         if resolved_model == TemperatureModuleModel.TEMPERATURE_V1\
                 and resolved_type == ModuleType.TEMPERATURE:
-            return [mock_module_controller]
+            return [mock_module_controller], None
         return []
     mock_hardware.find_modules.side_effect = find_modules
     return ProtocolContext(
@@ -52,7 +52,7 @@ def ctx_with_magdeck(
     def find_modules(resolved_model: ModuleModel, resolved_type: ModuleType):
         if resolved_model == MagneticModuleModel.MAGNETIC_V1 and\
                 resolved_type == ModuleType.MAGNETIC:
-            return [mock_module_controller]
+            return [mock_module_controller], None
         return []
     mock_hardware.find_modules.side_effect = find_modules
     return ProtocolContext(
@@ -70,7 +70,7 @@ def ctx_with_thermocycler(
     def find_modules(resolved_model: ModuleModel, resolved_type: ModuleType):
         if resolved_model == ThermocyclerModuleModel.THERMOCYCLER_V1 and \
                 resolved_type == ModuleType.THERMOCYCLER:
-            return [mock_module_controller]
+            return [mock_module_controller], None
         return []
     mock_hardware.find_modules.side_effect = find_modules
     return ProtocolContext(

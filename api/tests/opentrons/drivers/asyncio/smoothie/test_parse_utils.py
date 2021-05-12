@@ -1,4 +1,5 @@
 import pytest
+from opentrons.drivers import utils
 from opentrons.drivers.asyncio.smoothie import parse_utils
 from opentrons.drivers.utils import ParseError
 
@@ -33,7 +34,7 @@ def test_parse_position_response_error(data: str):
 def test_parse_pipette_data():
     msg = 'TestsRule!!'
     mount = 'L'
-    good_data = mount + ': ' + parse_utils.byte_array_to_hex_string(msg.encode())
+    good_data = mount + ': ' + utils.string_to_hex(msg)
     parsed = parse_utils.parse_instrument_data(
         good_data).get(mount)
     assert parsed.decode() == msg

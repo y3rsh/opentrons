@@ -22,9 +22,10 @@ def parse_position_response(raw_axis_values: str) -> Dict[str, float]:
     """
     parsed_values = parse_key_values(raw_axis_values)
     if len(parsed_values) < 6:
-        msg = f'Unexpected response in _parse_position_response: {raw_axis_values}'
-        log.error(msg)
-        raise ParseError(msg)
+        raise ParseError(
+            error_message="Unexpected response in _parse_position_response",
+            parse_source=raw_axis_values
+        )
 
     data = {
         k.title(): parse_number(v, GCODE_ROUNDING_PRECISION)
@@ -48,13 +49,16 @@ def parse_instrument_data(smoothie_response: str) -> Dict[str, bytearray]:
         items = smoothie_response.split('\n')[0].strip().split(':')
         mount = items[0]
         if mount not in {'L', 'R'}:
-            raise ParseError(f"'{mount}' is not a valid mount.")
+            raise ParseError(
+                error_message=f"Invalid mount '{mount}'",
+                parse_source=smoothie_response)
         # data received from Smoothieware is stringified HEX values
         # because of how Smoothieware handles GCODE messages
         data = bytearray.fromhex(items[1])
     except (ValueError, IndexError, TypeError, AttributeError):
         raise ParseError(
-            f'Unexpected argument to _parse_instrument_data: {smoothie_response}'
+            error_message="Unexpected argument to parse_instrument_data",
+            parse_source=smoothie_response
         )
     return {mount: data}
 
@@ -79,20 +83,8 @@ def byte_array_to_ascii_string(byte_array: bytearray) -> str:
     except (ValueError, TypeError, AttributeError):
         log.exception('Unexpected argument to _byte_array_to_ascii_string:')
         raise ParseError(
-            f'Unexpected argument to _byte_array_to_ascii_string: {byte_array}'
-        )
-    return res
-
-
-def byte_array_to_hex_string(byte_array):
-    # data must be sent as stringified HEX values
-    # because of how Smoothieware parses GCODE messages
-    try:
-        res = ''.join('%02x' % b for b in byte_array)
-    except TypeError:
-        log.exception('Unexpected argument to _byte_array_to_hex_string:')
-        raise ParseError(
-            f'Unexpected argument to _byte_array_to_hex_string: {byte_array}'
+            error_message="Unexpected argument to byte_array_to_ascii_string",
+            parse_source=byte_array.decode()
         )
     return res
 
@@ -100,7 +92,8 @@ def byte_array_to_hex_string(byte_array):
 def parse_switch_values(raw_switch_values: str) -> Dict[str, bool]:
     if not raw_switch_values or not isinstance(raw_switch_values, str):
         raise ParseError(
-            f'Unexpected argument to _parse_switch_values: {raw_switch_values}'
+            error_message="Unexpected argument to parse_switch_values",
+            parse_source=raw_switch_values
         )
 
     # probe has a space after it's ":" for some reason
@@ -120,7 +113,8 @@ def parse_switch_values(raw_switch_values: str) -> Dict[str, bool]:
     }
     if len((list(AXES) + ['Probe']) & res.keys()) != 7:
         raise ParseError(
-            f'Unexpected argument to _parse_switch_values: {raw_switch_values}'
+            error_message="Unexpected argument to parse_switch_values",
+            parse_source=raw_switch_values
         )
     return res
 
@@ -143,7 +137,7 @@ def parse_homing_status_values(raw_homing_status_values):
     }
     if len(list(AXES) & res.keys()) != 6:
         raise ParseError(
-            f'Unexpected argument to '
-            f'_parse_homing_status_values: {raw_homing_status_values}'
+            error_message="Unexpected argument to parse_homing_status_values",
+            parse_source=raw_homing_status_values
         )
     return res

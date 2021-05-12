@@ -207,8 +207,8 @@ class MagDeckDriver(AbstractMagDeckDriver):
         Returns:
             command response
         """
-        response = await self._connection.send_data(
-            data=command.build(),
+        response = await self._connection.send_command(
+            command=command,
             retries=DEFAULT_COMMAND_RETRIES
         )
         return response

@@ -5,7 +5,11 @@ from mock import AsyncMock
 from opentrons.drivers.asyncio.communication.serial_connection import \
     SerialConnection
 from opentrons.drivers.asyncio.thermocycler import driver
-from opentrons.drivers.types import Temperature, PlateTemperature, ThermocyclerLidStatus
+from opentrons.drivers.command_builder import CommandBuilder
+from opentrons.drivers.types import (
+    Temperature, PlateTemperature, ThermocyclerLidStatus
+)
+from opentrons.drivers.utils import TC_GCODE_ROUNDING_PRECISION
 
 
 @pytest.fixture
@@ -15,7 +19,7 @@ def connection() -> AsyncMock:
 
 @pytest.fixture
 def subject(connection: AsyncMock) -> driver.ThermocyclerDriver:
-    connection.send_data.return_value = ""
+    connection.send_command.return_value = ""
     return driver.ThermocyclerDriver(connection)
 
 
@@ -24,7 +28,11 @@ async def test_open_lid(subject: driver.ThermocyclerDriver,
     """It should send an open lid command."""
     await subject.open_lid()
 
-    connection.send_data.assert_called_once_with(data="M126 \r\n", retries=3)
+    expected = CommandBuilder(
+        terminator=driver.TC_COMMAND_TERMINATOR
+    ).add_gcode(gcode="M126")
+
+    connection.send_command.assert_called_once_with(command=expected, retries=3)
 
 
 async def test_close_lid(subject: driver.ThermocyclerDriver,
@@ -32,17 +40,25 @@ async def test_close_lid(subject: driver.ThermocyclerDriver,
     """It should send a close lid command."""
     await subject.close_lid()
 
-    connection.send_data.assert_called_once_with(data="M127 \r\n", retries=3)
+    expected = CommandBuilder(
+        terminator=driver.TC_COMMAND_TERMINATOR
+    ).add_gcode(gcode="M127")
+
+    connection.send_command.assert_called_once_with(command=expected, retries=3)
 
 
 async def test_get_lid_status(subject: driver.ThermocyclerDriver,
                               connection: AsyncMock) -> None:
     """It should send a get lid status command and parse response."""
-    connection.send_data.return_value = 'Lid:open\r\nok\r\nok\r\n'
+    connection.send_command.return_value = 'Lid:open\r\nok\r\nok\r\n'
 
     response = await subject.get_lid_status()
 
-    connection.send_data.assert_called_once_with(data="M119 \r\n", retries=3)
+    expected = CommandBuilder(
+        terminator=driver.TC_COMMAND_TERMINATOR
+    ).add_gcode(gcode="M119")
+
+    connection.send_command.assert_called_once_with(command=expected, retries=3)
     assert response == ThermocyclerLidStatus.OPEN
 
 
@@ -61,19 +77,29 @@ async def test_set_lid_temp(subject: driver.ThermocyclerDriver,
     """It should send a set lid temperature command honoring the min/max."""
     await subject.set_lid_temperature(temp=requested_temp)
 
-    expected = f"M140 S{actual_temp} \r\n"
+    expected = CommandBuilder(
+        terminator=driver.TC_COMMAND_TERMINATOR
+    ).add_gcode(
+        gcode="M140"
+    ).add_float(
+        prefix="S", value=actual_temp, precision=TC_GCODE_ROUNDING_PRECISION
+    )
 
-    connection.send_data.assert_called_once_with(data=expected, retries=3)
+    connection.send_command.assert_called_once_with(command=expected, retries=3)
 
 
 async def test_get_lid_temp(subject: driver.ThermocyclerDriver,
                             connection: AsyncMock) -> None:
     """It should send a get lid temperate command and parse response."""
-    connection.send_data.return_value = "T:100.000 C:22.041\r\nok\r\nok\r\n'"
+    connection.send_command.return_value = "T:100.000 C:22.041\r\nok\r\nok\r\n'"
 
     response = await subject.get_lid_temperature()
 
-    connection.send_data.assert_called_once_with(data="M141 \r\n", retries=3)
+    expected = CommandBuilder(
+        terminator=driver.TC_COMMAND_TERMINATOR
+    ).add_gcode(gcode="M141")
+
+    connection.send_command.assert_called_once_with(command=expected, retries=3)
     assert response == Temperature(target=100, current=22.04)
 
 
@@ -95,18 +121,32 @@ async def test_set_plate_temp(
     """It should send a set plate temperature command."""
     await subject.set_plate_temperature(temp=temp, hold_time=hold_time, volume=volume)
 
-    connection.send_data.assert_called_once_with(
-        data=f"M104 {expected_body} \r\n", retries=3)
+    expected = CommandBuilder(
+        terminator=driver.TC_COMMAND_TERMINATOR
+    ).add_gcode(
+        gcode="M104"
+    ).add_element(
+        element=expected_body
+    )
+
+    connection.send_command.assert_called_once_with(
+        command=expected, retries=3)
 
 
 async def test_get_plate_temp(subject: driver.ThermocyclerDriver,
                               connection: AsyncMock) -> None:
     """It should send a command to get the plate temperature and parse the response."""
-    connection.send_data.return_value = "T:30.000 C:23.317 H:120\r\nok\r\nok\r\n"
+    connection.send_command.return_value = "T:30.000 C:23.317 H:120\r\nok\r\nok\r\n"
 
     response = await subject.get_plate_temperature()
 
-    connection.send_data.assert_called_once_with(data="M105 \r\n", retries=3)
+    expected = CommandBuilder(
+        terminator=driver.TC_COMMAND_TERMINATOR
+    ).add_gcode(
+        gcode="M105"
+    )
+
+    connection.send_command.assert_called_once_with(command=expected, retries=3)
     assert response == PlateTemperature(
         target=30, current=23.32, hold=120
     )
@@ -117,7 +157,15 @@ async def test_set_ramp_rate(subject: driver.ThermocyclerDriver,
     """It should send a set ramp rate command."""
     await subject.set_ramp_rate(ramp_rate=22)
 
-    connection.send_data.assert_called_once_with(data="M566 S22 \r\n", retries=3)
+    expected = CommandBuilder(
+        terminator=driver.TC_COMMAND_TERMINATOR
+    ).add_gcode(
+        gcode="M566"
+    ).add_float(
+        prefix="S", value=22, precision=TC_GCODE_ROUNDING_PRECISION
+    )
+
+    connection.send_command.assert_called_once_with(command=expected, retries=3)
 
 
 async def test_deactivate_all(subject: driver.ThermocyclerDriver,
@@ -125,7 +173,13 @@ async def test_deactivate_all(subject: driver.ThermocyclerDriver,
     """It should send a deactivate all command."""
     await subject.deactivate_all()
 
-    connection.send_data.assert_called_once_with(data="M18 \r\n", retries=3)
+    expected = CommandBuilder(
+        terminator=driver.TC_COMMAND_TERMINATOR
+    ).add_gcode(
+        gcode="M18"
+    )
+
+    connection.send_command.assert_called_once_with(command=expected, retries=3)
 
 
 async def test_deactivate_lid(subject: driver.ThermocyclerDriver,
@@ -133,7 +187,13 @@ async def test_deactivate_lid(subject: driver.ThermocyclerDriver,
     """It should send a deactivate lid command."""
     await subject.deactivate_lid()
 
-    connection.send_data.assert_called_once_with(data="M108 \r\n", retries=3)
+    expected = CommandBuilder(
+        terminator=driver.TC_COMMAND_TERMINATOR
+    ).add_gcode(
+        gcode="M108"
+    )
+
+    connection.send_command.assert_called_once_with(command=expected, retries=3)
 
 
 async def test_deactivate_block(subject: driver.ThermocyclerDriver,
@@ -141,16 +201,28 @@ async def test_deactivate_block(subject: driver.ThermocyclerDriver,
     """It should send a deactivate block command."""
     await subject.deactivate_block()
 
-    connection.send_data.assert_called_once_with(data="M14 \r\n", retries=3)
+    expected = CommandBuilder(
+        terminator=driver.TC_COMMAND_TERMINATOR
+    ).add_gcode(
+        gcode="M14"
+    )
+
+    connection.send_command.assert_called_once_with(command=expected, retries=3)
 
 
 async def test_device_info(subject: driver.ThermocyclerDriver,
                            connection: AsyncMock) -> None:
     """It should send a get device info command and parse response."""
-    connection.send_data.return_value = "serial:s model:m version:v"
+    connection.send_command.return_value = "serial:s model:m version:v"
 
     device_info = await subject.get_device_info()
 
-    connection.send_data.assert_called_once_with(data="M115 \r\n", retries=3)
+    expected = CommandBuilder(
+        terminator=driver.TC_COMMAND_TERMINATOR
+    ).add_gcode(
+        gcode="M115"
+    )
+
+    connection.send_command.assert_called_once_with(command=expected, retries=3)
 
     assert device_info == {"serial": "s", "model": "m", "version": "v"}

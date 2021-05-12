@@ -349,17 +349,17 @@ async def test_fast_home(subject: SmoothieDriver, spy: MagicMock):
     ]
 
 
-def test_update_homing_flags(subject: SmoothieDriver, spy: MagicMock):
-    subject.update_homed_flags()
-    command_log = [x[0][0].strip() for x in spy.call_args_list]
+async def test_update_homing_flags(subject: SmoothieDriver, spy: MagicMock):
+    await subject.update_homed_flags()
+    command_log = [x.kwargs['data'].strip() for x in spy.call_args_list]
     assert command_log == [
         'G28.6',
         'M400'
     ]
 
 
-def test_update_pipette_config(subject: SmoothieDriver, spy: MagicMock):
-    subject.update_pipette_config("X", {
+async def test_update_pipette_config(subject: SmoothieDriver, spy: MagicMock):
+    await subject.update_pipette_config("X", {
         'retract': 2,
         'debounce': 3,
         'max_travel': 4,

@@ -121,7 +121,7 @@ class SerialConnection:
 
             await self.on_retry()
 
-        raise NoResponse("retry count exhausted")
+        raise NoResponse(port=self._port, command=data)
 
     async def open(self) -> None:
         """Open the connection."""
@@ -143,8 +143,7 @@ class SerialConnection:
     def name(self) -> str:
         return self._name
 
-    @staticmethod
-    def raise_on_error(response: str) -> None:
+    def raise_on_error(self, response: str) -> None:
         """
         Raise an error if the response contains an error
 
@@ -157,10 +156,10 @@ class SerialConnection:
         """
         lower = response.lower()
         if "error" in lower:
-            raise ErrorResponse(response)
+            raise ErrorResponse(port=self._port, response=response)
 
         if "alarm" in lower:
-            raise AlarmResponse(response)
+            raise AlarmResponse(port=self._port, response=response)
 
     async def on_retry(self) -> None:
         """
