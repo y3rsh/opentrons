@@ -212,3 +212,31 @@ async def test_clear_limit_switch(smoothie: driver.SmoothieDriver, mock_connecti
         'M907 A0.1 B0.05 C0.05 X0.3 Y0.3 Z0.1 G4 P0.005',
         'M400',
     ]
+
+
+async def test_unstick_axes(smoothie: driver.SmoothieDriver, mock_connection: AsyncMock):
+    cmd_list = []
+
+    def write_mock(command, retries):
+        cmd_list.append(command.build())
+        if constants.GCODE.LIMIT_SWITCH_STATUS in command:
+            return 'X_max:0 Y_max:0 Z_max:0 A_max:0 B_max:0 C_max:0 Probe: 0 \r\n'
+        else:
+            return "ok"
+
+    mock_connection.send_command.side_effect = write_mock
+
+    await smoothie.unstick_axes(axes="ABCXYZ", distance=2, speed=3)
+
+    assert [c.strip() for c in cmd_list] == [
+        'M203.1 A3 B3 C3 X3 Y3 Z3',
+        'M400',
+        'M119',
+        'M400',
+        'M907 A0.5 B0.05 C0.05 X1.25 Y1.25 Z0.5 G4 P0.005 G0 A-2 B-2 C-2 X-2 Y-2 Z-2',
+        'M400',
+        'M907 A0.5 B0.05 C0.05 X1.25 Y1.25 Z0.5 G4 P0.005',
+        'M400',
+        'M203.1 A125 B40 C40 X600 Y400 Z125',
+        'M400',
+    ]
