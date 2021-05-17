@@ -1,11 +1,9 @@
 from __future__ import annotations
 import asyncio
 import contextlib
-from os import environ
 import logging
-from time import sleep, time
-from threading import Event
-from typing import Any, Dict, Optional, Union, List, Tuple, cast
+from time import time
+from typing import Any, Dict, Optional, Union, List, Tuple
 
 from math import isclose
 
@@ -110,7 +108,7 @@ class SmoothieDriver:
             connection: The serial connection.
             gpio_chardev: GPIO device.
         """
-        self.run_flag = Event()
+        self.run_flag = asyncio.Event()
         self.run_flag.set()
 
         self._position = HOMED_POSITION.copy()
@@ -173,7 +171,7 @@ class SmoothieDriver:
             'C': False
         })
 
-        self._is_hard_halting = Event()
+        self._is_hard_halting = asyncio.Event()
         self._move_split_config: MoveSplits = {}
         #: Cache of currently configured splits from callers
         self._axes_moved_at = AxisMoveTimestamp(AXES)
@@ -263,7 +261,8 @@ class SmoothieDriver:
         :return model string, or None
         """
         res = await self._read_from_pipette(
-            GCODE.READ_INSTRUMENT_MODEL, mount)
+            GCODE.READ_INSTRUMENT_MODEL, mount
+        )
         if res and '_v' not in res:
             # Backward compatibility for pipettes programmed with model
             # strings that did not include the _v# designation
@@ -345,17 +344,14 @@ class SmoothieDriver:
             res_msg[axis][key] = value
 
         return res_msg
-
-    # FIXME (JG 9/28/17): Should have a more thought out
-    # way of simulating vs really running
-    def connect(self, port: str = None):
-        if environ.get('ENABLE_VIRTUAL_SMOOTHIE', '').lower() == 'true':
-            # self.simulating = True
-            return
-        self.disconnect()
-        self._connect_to_port(port)
-        self._setup()
-
+    #
+    # # FIXME (JG 9/28/17): Should have a more thought out
+    # # way of simulating vs really running
+    # def connect(self, port: str = None):
+    #     self.disconnect()
+    #     self._connect_to_port(port)
+    #     self._setup()
+    #
     def disconnect(self):
         if self.is_connected():
             self._connection.close()  # type: ignore
@@ -369,9 +365,9 @@ class SmoothieDriver:
     async def _connect_to_port(self, port: str = None):
         try:
             # TODO deal with get port by name
-            if not port:
-                smoothie_id = environ.get('OT_SMOOTHIE_ID', 'AMA')
-                port = get_ports_by_name(smoothie_id)[0]
+            # if not port:
+            #     smoothie_id = environ.get('OT_SMOOTHIE_ID', 'AMA')
+            #     port = get_ports_by_name(smoothie_id)[0]
 
             self._connection = await SerialConnection.create(
                 port=port,
@@ -597,7 +593,8 @@ class SmoothieDriver:
 
     def push_active_current(self) -> None:
         self._active_current_settings.saved.update(
-            self._active_current_settings.now)
+            self._active_current_settings.now
+        )
 
     def pop_active_current(self) -> None:
         self.set_active_current(self._active_current_settings.saved)
@@ -630,7 +627,8 @@ class SmoothieDriver:
 
     def push_dwelling_current(self) -> None:
         self._dwelling_current_settings.saved.update(
-            self._dwelling_current_settings.now)
+            self._dwelling_current_settings.now
+        )
 
     def pop_dwelling_current(self) -> None:
         self.set_dwelling_current(self._dwelling_current_settings.saved)
@@ -756,7 +754,7 @@ class SmoothieDriver:
     async def _reset_from_error(self) -> None:
         # smoothieware will ignore new messages for a short time
         # after it has entered an error state, so sleep for some milliseconds
-        sleep(DEFAULT_STABILIZE_DELAY)
+        await asyncio.sleep(DEFAULT_STABILIZE_DELAY)
         log.debug("reset_from_error")
         await self._send_command(
             _command_builder().add_gcode(gcode=GCODE.RESET_FROM_ERROR)
@@ -1174,7 +1172,7 @@ class SmoothieDriver:
         - the actual move, plus a bit extra to give room to preload backlash
         - if we preload backlash we then issue a third move to preload backlash
         """
-        self.run_flag.wait()
+        await self.run_flag.wait()
 
         def valid_movement(axis: str, coord: float) -> bool:
             """ True if the axis is not disabled and the coord is different
@@ -1352,7 +1350,7 @@ class SmoothieDriver:
             self, axis: str = AXES, disabled: str = DISABLE_AXES
     ) -> Dict[str, float]:
 
-        self.run_flag.wait()
+        await self.run_flag.wait()
 
         axis = axis.upper()
 
@@ -1578,7 +1576,7 @@ class SmoothieDriver:
         disabled = ''.join(ax for ax in AXES if ax not in axis.upper())
         return await self.home(axis=axis, disabled=disabled)
 
-    def unstick_axes(
+    async def unstick_axes(
             self, axes: str, distance: float = None, speed: float = None):
         """
         The plunger axes on OT2 can build up static friction over time and
@@ -1610,10 +1608,10 @@ class SmoothieDriver:
             for ax in axes
             })
         self.push_axis_max_speed()
-        self.set_axis_max_speed({ax: speed for ax in axes})
+        await self.set_axis_max_speed({ax: speed for ax in axes})
 
         # only need to request switch state once
-        state_of_switches = self.switch_state
+        state_of_switches = await self.switch_state()
 
         # incase axes is pressing endstop, home it slowly instead of moving
         homing_axes = ''.join(ax for ax in axes if state_of_switches[ax])
@@ -1625,12 +1623,12 @@ class SmoothieDriver:
 
         try:
             if moving_axes:
-                self.move(moving_axes)
+                await self.move(moving_axes)
             if homing_axes:
-                self.home(homing_axes)
+                await self.home(homing_axes)
         finally:
             self.pop_active_current()
-            self.pop_axis_max_speed()
+            await self.pop_axis_max_speed()
 
     def pause(self):
         self.run_flag.clear()
@@ -1716,7 +1714,7 @@ class SmoothieDriver:
         return {'button': self._gpio_chardev.get_button_light()[2],
                 'rails': self._gpio_chardev.get_rail_lights()}
 
-    def kill(self):
+    async def kill(self):
         """
         In order to terminate Smoothie motion immediately (including
         interrupting a command in progress, we set the reset pin low and then
@@ -1725,9 +1723,9 @@ class SmoothieDriver:
         any other state needed for the driver.
         """
         log.debug("kill")
-        self.hard_halt()
-        self._reset_from_error()
-        self._setup()
+        await self.hard_halt()
+        await self._reset_from_error()
+        await self._setup()
 
     def home_flagged_axes(self, axes_string: str):
         """
@@ -1743,33 +1741,33 @@ class SmoothieDriver:
             axes_string = ''.join(axes_that_need_to_home)
             self.home(axes_string)
 
-    def _smoothie_reset(self):
+    async def _smoothie_reset(self):
         log.debug(f'Resetting Smoothie')
         self._gpio_chardev.set_reset_pin(False)
         self._gpio_chardev.set_isp_pin(True)
-        sleep(0.25)
+        await asyncio.sleep(0.25)
         self._gpio_chardev.set_reset_pin(True)
-        sleep(0.25)
-        self._wait_for_ack()
-        self._reset_from_error()
+        await asyncio.sleep(0.25)
+        await self._wait_for_ack()
+        await self._reset_from_error()
 
-    def _smoothie_programming_mode(self):
+    async def _smoothie_programming_mode(self):
         log.debug(f'Setting Smoothie to ISP mode')
         self._gpio_chardev.set_reset_pin(False)
         self._gpio_chardev.set_isp_pin(False)
-        sleep(0.25)
+        await asyncio.sleep(0.25)
         self._gpio_chardev.set_reset_pin(True)
-        sleep(0.25)
+        await asyncio.sleep(0.25)
         self._gpio_chardev.set_isp_pin(True)
-        sleep(0.25)
+        await asyncio.sleep(0.25)
 
-    def hard_halt(self):
+    async def hard_halt(self):
         log.debug(f'Halting Smoothie')
         self._is_hard_halting.set()
         self._gpio_chardev.set_halt_pin(False)
-        sleep(0.25)
+        await asyncio.sleep(0.25)
         self._gpio_chardev.set_halt_pin(True)
-        sleep(0.25)
+        await asyncio.sleep(0.25)
         self.run_flag.set()
 
     async def update_firmware(self,
@@ -1806,7 +1804,7 @@ class SmoothieDriver:
         if explicit_modeset:
             log.info("Setting programming mode")
             # set smoothieware into programming mode
-            self._smoothie_programming_mode()
+            await self._smoothie_programming_mode()
             # close the port so other application can access it
             await self._connection.close()
 
@@ -1842,7 +1840,7 @@ class SmoothieDriver:
         # re-open the port
         await self._connection.open()
         # reset smoothieware
-        self._smoothie_reset()
+        await self._smoothie_reset()
         # run setup gcodes
         await self._setup()
 
