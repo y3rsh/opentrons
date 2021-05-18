@@ -1,4 +1,5 @@
 from copy import deepcopy
+from typing import Dict
 from unittest.mock import Mock
 import pytest
 from opentrons.drivers.types import MoveSplit
@@ -787,3 +788,47 @@ def test_unstick_axes(smoothie, monkeypatch):
         'M907 A0.5 B0.05 C0.05 X1.25 Y1.25 Z0.5 G4 P0.005 \r\n\r\n',
         'M203.1 A125 B40 C40 X600 Y400 Z125 \r\n\r\n',
     ]
+
+
+@pytest.mark.parametrize(
+    argnames=["home_flags", "axis_string", "expected"],
+    argvalues=[
+        [{k: False for k in "XYZABC"}, "A", "A"],
+        [{k: False for k in "XYZABC"}, "XA", "XA"],
+        [{k: False for k in "XYZABC"}, "XY", "XY"],
+        [{k: False for k in "XYZABC"}, "XYZABC", "XYZABC"],
+        [{"A": True, "B": False, "C": True,
+          "X": False, "Y": True, "Z": False}, "XYZABC", "XZB"],
+    ]
+)
+def test_home_flagged_axes(
+    smoothie, home_flags: Dict[str, bool], axis_string: str, expected: str
+) -> None:
+    """It should only home un-homed axes."""
+    smoothie.home = Mock()
+    smoothie.update_homed_flags(home_flags)
+
+    smoothie.home_flagged_axes(axes_string=axis_string)
+
+    smoothie.home.assert_called_once_with(expected)
+
+
+@pytest.mark.parametrize(
+    argnames=["home_flags", "axis_string"],
+    argvalues=[
+        [{k: True for k in "XYZABC"}, "A"],
+        [{k: True for k in "XYZABC"}, "XYZABC"],
+        [{"A": True, "B": False, "C": True,
+          "X": False, "Y": True, "Z": False}, "ACY"],
+    ]
+)
+def test_home_flagged_axes_no_call(
+    smoothie, home_flags: Dict[str, bool], axis_string: str
+) -> None:
+    """It should not home homed axes."""
+    smoothie.home = Mock()
+    smoothie.update_homed_flags(home_flags)
+
+    smoothie.home_flagged_axes(axes_string=axis_string)
+
+    smoothie.home.assert_not_called()

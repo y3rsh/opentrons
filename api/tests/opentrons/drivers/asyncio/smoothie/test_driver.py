@@ -1,4 +1,5 @@
 from copy import deepcopy
+from typing import Dict
 
 from opentrons.drivers import utils
 from opentrons.drivers.asyncio.communication import AlarmResponse
@@ -7,6 +8,8 @@ from mock import AsyncMock
 import pytest
 from opentrons.drivers.asyncio.smoothie.connection import \
     SmoothieConnection
+from opentrons.drivers.asyncio.smoothie.constants import HOMED_POSITION, \
+    Y_BOUND_OVERRIDE
 from opentrons.drivers.rpi_drivers.gpio_simulator import SimulatingGPIOCharDev
 
 from opentrons.drivers.asyncio.smoothie import driver
@@ -240,3 +243,87 @@ async def test_unstick_axes(smoothie: driver.SmoothieDriver, mock_connection: As
         'M203.1 A125 B40 C40 X600 Y400 Z125',
         'M400',
     ]
+
+
+@pytest.mark.parametrize(
+    argnames=["home_flags", "axis_string", "expected"],
+    argvalues=[
+        [{k: False for k in "XYZABC"}, "A", "A"],
+        [{k: False for k in "XYZABC"}, "XA", "XA"],
+        [{k: False for k in "XYZABC"}, "XY", "XY"],
+        [{k: False for k in "XYZABC"}, "XYZABC", "XYZABC"],
+        [{"A": True, "B": False, "C": True,
+          "X": False, "Y": True, "Z": False}, "XYZABC", "XZB"],
+    ]
+)
+async def test_home_flagged_axes(
+        smoothie: driver.SmoothieDriver, home_flags: Dict[str, bool],
+        axis_string: str, expected: str
+) -> None:
+    """It should only home un-homed axes."""
+    smoothie.home = AsyncMock()
+    await smoothie.update_homed_flags(home_flags)
+
+    await smoothie.home_flagged_axes(axes_string=axis_string)
+
+    smoothie.home.assert_called_once_with(expected)
+
+
+@pytest.mark.parametrize(
+    argnames=["home_flags", "axis_string"],
+    argvalues=[
+        [{k: True for k in "XYZABC"}, "A"],
+        [{k: True for k in "XYZABC"}, "XYZABC"],
+        [{"A": True, "B": False, "C": True,
+          "X": False, "Y": True, "Z": False}, "ACY"],
+    ]
+)
+async def test_home_flagged_axes_no_call(
+    smoothie: driver.SmoothieDriver, home_flags: Dict[str, bool], axis_string: str
+) -> None:
+    """It should not home homed axes."""
+    smoothie.home = AsyncMock()
+    await smoothie.update_homed_flags(home_flags)
+
+    await smoothie.home_flagged_axes(axes_string=axis_string)
+
+    smoothie.home.assert_not_called()
+
+
+async def test_update_homed_flags_retry(
+        smoothie: driver.SmoothieDriver, mock_connection: AsyncMock
+) -> None:
+    """It should retry."""
+    mock_connection.is_open.return_value = True
+
+    # Set all to false
+    await smoothie.update_homed_flags({
+        k: False for k in "ABCXYZ"
+    })
+
+    # First response is error then all axes homed
+    mock_connection.send_command.side_effect = [
+        # first attempt to read, we get bad data
+        'ok AX:1 BBY:0 Z:0 A:0 B:0 C:0',
+        'ok',
+        'ok X:1 Y:1 Z:1 A:1 B:1 C:1',
+        'ok',
+    ]
+
+    await smoothie.update_homed_flags()
+
+    assert smoothie.homed_flags == {
+        k: True for k in "ABCXYZ"
+    }
+
+
+def test_axis_bounds(
+        smoothie: driver.SmoothieDriver
+) -> None:
+    """It should override Y."""
+    bounds = smoothie.axis_bounds
+
+    assert bounds == {
+        k: (v if k != 'Y' else Y_BOUND_OVERRIDE)
+        for k, v in HOMED_POSITION.items()
+    }

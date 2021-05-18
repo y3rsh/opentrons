@@ -1268,7 +1268,7 @@ class SmoothieDriver_3_0_0:
             self._wait_for_ack()
         except serial_communication.SerialNoResponse:
             # incase motor-driver is stuck in bootloader and unresponsive,
-            # use gpio to reset into a ktimen state
+            # use gpio to reset into a known state
             log.debug("wait for ack failed, resetting")
             self._smoothie_reset()
         log.debug("wait for ack done")
@@ -1742,7 +1742,7 @@ class SmoothieDriver_3_0_0:
         """ Handle split moves for unsticking axes before home.
 
         This is particularly ugly bit of code that flips the motor controller
-        into relative mode since we don't necessarily ktime where we are.
+        into relative mode since we don't necessarily know where we are.
 
         It will induce a movement. It should really only be called before a
         home because it doesn't update the position cache.
@@ -1823,7 +1823,7 @@ class SmoothieDriver_3_0_0:
     def fast_home(self, axis, safety_margin):
         """ home after a controlled motor stall
 
-        Given a ktimen distance we have just stalled along an axis, move
+        Given a known distance we have just stalled along an axis, move
         that distance away from the homing switch. Then finish with home.
         """
         # move some mm distance away from the target axes endstop switch(es)

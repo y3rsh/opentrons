@@ -25,7 +25,6 @@ from opentrons.drivers.asyncio.smoothie.errors import SmoothieError, \
     SmoothieAlarm, TipProbeError
 from opentrons.drivers.asyncio.smoothie import parse_utils
 from opentrons.drivers.command_builder import CommandBuilder
-from opentrons.drivers.serial_communication import get_ports_by_name
 
 from opentrons.config.types import RobotConfig
 from opentrons.config.robot_configs import current_for_revision
@@ -456,7 +455,7 @@ class SmoothieDriver:
                     retries -= 1
                     if retries <= 0:
                         raise e
-                    sleep(DEFAULT_STABILIZE_DELAY)
+                    await asyncio.sleep(DEFAULT_STABILIZE_DELAY)
                     return await _recursive_update_homed_flags(retries)
 
             await _recursive_update_homed_flags(DEFAULT_COMMAND_RETRIES)
@@ -1004,9 +1003,9 @@ class SmoothieDriver:
             await self._wait_for_ack()
         except NoResponse:
             # in case motor-driver is stuck in bootloader and unresponsive,
-            # use gpio to reset into a ktimen state
+            # use gpio to reset into a known state
             log.debug("wait for ack failed, resetting")
-            self._smoothie_reset()
+            await self._smoothie_reset()
         log.debug("wait for ack done")
         await self._reset_from_error()
         log.debug("_reset")
@@ -1475,7 +1474,7 @@ class SmoothieDriver:
         """ Handle split moves for unsticking axes before home.
 
         This is particularly ugly bit of code that flips the motor controller
-        into relative mode since we don't necessarily ktime where we are.
+        into relative mode since we don't necessarily know where we are.
 
         It will induce a movement. It should really only be called before a
         home because it doesn't update the position cache.
@@ -1556,7 +1555,7 @@ class SmoothieDriver:
     async def fast_home(self, axis, safety_margin):
         """ home after a controlled motor stall
 
-        Given a ktimen distance we have just stalled along an axis, move
+        Given a known distance we have just stalled along an axis, move
         that distance away from the homing switch. Then finish with home.
         """
         # move some mm distance away from the target axes endstop switch(es)
@@ -1727,19 +1726,17 @@ class SmoothieDriver:
         await self._reset_from_error()
         await self._setup()
 
-    def home_flagged_axes(self, axes_string: str):
+    async def home_flagged_axes(self, axes_string: str):
         """
         Given a list of axes to check, this method will home each axis if
         Smoothieware's internal flag sets it as needing to be homed
         """
         axes_that_need_to_home = [
-            axis
-            for axis, already_homed in self.homed_flags.items()
-            if (not already_homed) and (axis in axes_string)
+            axis for axis in axes_string if not self.homed_flags.get(axis)
         ]
         if axes_that_need_to_home:
             axes_string = ''.join(axes_that_need_to_home)
-            self.home(axes_string)
+            await self.home(axes_string)
 
     async def _smoothie_reset(self):
         log.debug(f'Resetting Smoothie')
