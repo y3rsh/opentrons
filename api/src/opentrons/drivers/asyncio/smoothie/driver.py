@@ -365,7 +365,7 @@ class SmoothieDriver:
 
     # FIXME (JG 9/28/17): Should have a more thought out
     # way of simulating vs really running
-    async def connect(self, port: str) -> None:
+    async def connect(self, port: str = None) -> None:
         if environ.get('ENABLE_VIRTUAL_SMOOTHIE', '').lower() == 'true':
             self.simulating = True
             return
@@ -1059,7 +1059,7 @@ class SmoothieDriver:
         log.debug("sent abs")
         self._save_current(self.current, axes_active=False)
         log.debug("sent current")
-        await self.update_position()
+        await self.update_position(default=self.homed_position)
         await self.pop_axis_max_speed()
         await self.pop_speed()
         await self.pop_acceleration()
