@@ -1461,7 +1461,7 @@ class SmoothieDriver:
             ax: self.homed_position.get(ax)
             for ax in homed_axes
         }
-        await self.update_position()
+        await self.update_position(default=homed)
 
         for ax in homed_axes:
             self.engaged_axes[ax] = True
@@ -1716,7 +1716,7 @@ class SmoothieDriver:
                     raise TipProbeError(se.ret_code, se.command)
                 else:
                     raise
-            await self.update_position()
+            await self.update_position(self.position)
             return self.position
         else:
             raise RuntimeError(f"Cant probe axis {axis}")
