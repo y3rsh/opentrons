@@ -17,7 +17,7 @@ async def subject(emulation_app) -> SmoothieDriver:
         config=build_config({})
     )
     yield d
-    d.disconnect()
+    await d.disconnect()
 
 
 @pytest.fixture
