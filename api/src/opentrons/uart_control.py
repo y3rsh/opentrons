@@ -1,5 +1,6 @@
 from serial import serial_for_url, Serial  # type: ignore
 import struct
+import argparse
 import enum
 
 
@@ -63,7 +64,11 @@ def run(uri="/dev/tty.usbmodem141103"):
 
 if __name__ == '__main__':
     try:
-        run()
+        parser = argparse.ArgumentParser(prog='Uart comms Test',
+                                         description='Control the Trinamics Drivers with a simple script')
+        parser.add_argument('-p', '--port')
+        args = parser.parse_args()
+        run(args.port)
     except Exception as e:
         print(e)
 
