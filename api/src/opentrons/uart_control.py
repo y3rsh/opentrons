@@ -1,65 +1,74 @@
 from serial import serial_for_url, Serial  # type: ignore
+from typing import Callable
 import struct
 import argparse
 import enum
+import functools
 
 
-def get_speed(s: Serial) -> int:
-    # Send get speed
-    s.write(bytearray([0, 0, 0, 0x10]))
-
-    # Read result
-    data = s.read(size=8)
-    arbitration, data = struct.unpack(">II", data)
-    return data
+class CommandType(str, enum.Enum):
+    read = 0
+    write = 1
 
 
-def set_speed(s: Serial, speed: int) -> None:
-    b = struct.pack(">II", 1, speed)
-    s.write(b)
+class MotorCommand(enum.Enum):
+    stop = (0x00, CommandType.write)
+    status = (0x01, CommandType.read)
+    move = (0x10, CommandType.write)
+    setup = (0x02, CommandType.write)
+    set_speed = (0x03, CommandType.write)
+    get_speed = (0x04, CommandType.read)
+
+    def __init__(self, value, type):
+        self.id = value
+        self.type = type
 
 
-def stop(s: Serial) -> None:
-    b = struct.pack(">I", 0)
-    s.write(b)
+class MotorControl:
+    def __init__(self, uri: str):
+        self._port = serial_for_url(uri, baudrate=9600)
 
+    @property
+    def port(self):
+        return self._port
 
-def handle_get_speed(s: Serial):
-    val = get_speed(s)
-    print("speed is: ", val)
+    def close(self):
+        self.port.close()
 
-
-def handle_set_speed(s: Serial):
-    speed = input("enter speed: ")
-    set_speed(s, int(speed))
-
-
-class Command(str, enum.Enum):
-    set_speed = "set"
-    get_speed = "get"
-    stop = "stop"
+    def handle_command(self, command: str, *args):
+        mc = MotorCommand[command]
+        if mc.type == CommandType.read and not args:
+            self.port.write(bytearray([0, 0, 0, mc.id]))
+            data = self.port.read(size=8)
+            arbitration, data = struct.unpack(">II", data)
+            print(f'Reading: {data}')
+        elif mc.type == CommandType.write:
+            if args:
+                msg = struct.pack('>II', mc.id, int(args[0]))
+            else:
+                msg = struct.pack('>I', mc.id)
+            print(f'Sending: {msg}')
+            self.port.write(msg)
+        else:
+            print('Invalid argument')
 
 
 def run(uri="/dev/tty.usbmodem141103"):
-    s = serial_for_url(uri, baudrate=9600)
-    print("valid commands: ", ", ".join([f"'{c.value}'={c.name}" for c in Command]))
+    motor_control = MotorControl(uri)
+    print("valid commands: ", ", ".join([f"{c.name}" for c in MotorCommand]))
 
     try:
         while True:
             command = input("enter a command: ")
-            command = command.lower()
-            if command == Command.set_speed:
-                handle_set_speed(s)
-            elif command == Command.get_speed:
-                handle_get_speed(s)
-            elif command == Command.stop:
-                stop(s)
+            commands = command.lower().split(' ')
+            if commands[0] in MotorCommand.__members__.keys():
+                motor_control.handle_command(*commands)
             else:
-                print(command, "is invalid.")
+                print(commands[0], "is invalid.")
     except Exception as e:
         print(e)
     finally:
-        s.close()
+        motor_control.close()
 
 
 if __name__ == '__main__':
@@ -71,4 +80,3 @@ if __name__ == '__main__':
         run(args.port)
     except Exception as e:
         print(e)
-
