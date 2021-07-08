@@ -38,7 +38,9 @@ class MotorControl:
     def handle_command(self, command: str, *args):
         mc = MotorCommand[command]
         if mc.type == CommandType.read and not args:
-            self.port.write(bytearray([0, 0, 0, mc.id]))
+            msg = bytearray([0, 0, 0, mc.id])
+            self.port.write(msg)
+            print(f'Sending: {msg}')
             data = self.port.read(size=8)
             arbitration, data = struct.unpack(">II", data)
             print(f'Reading: {data}')
