@@ -42,6 +42,7 @@ class MotorControl:
             self.port.write(msg)
             print(f'Sending: {msg}')
             data = self.port.read(size=8)
+            print(f'what is data: {data}')
             arbitration, data = struct.unpack(">II", data)
             print(f'Reading: {data}')
         elif mc.type == CommandType.write:
