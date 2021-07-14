@@ -41,7 +41,7 @@ class MotorControl:
             msg = bytearray([0, 0, 0, mc.id])
             self.port.write(msg)
             print(f'Sending: {msg}')
-            data = self.port.read(size=8)
+            data = self.port.read(size=16)
             print(f'what is data: {data}')
             arbitration, data = struct.unpack(">II", data)
             print(f'Reading: {data}')
