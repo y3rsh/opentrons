@@ -26,7 +26,7 @@ class MotorCommand(enum.Enum):
 
 class MotorControl:
     def __init__(self, uri: str):
-        self._port = serial_for_url(uri, baudrate=9600)
+        self._port = serial_for_url(uri, baudrate=9600, timeout=5)
 
     @property
     def port(self):
