@@ -12,16 +12,17 @@ class CommandType(str, enum.Enum):
 
 
 class MotorCommand(enum.Enum):
-    stop = (0x00, CommandType.write)
-    status = (0x01, CommandType.read)
-    move = (0x10, CommandType.write)
-    setup = (0x02, CommandType.write)
-    set_speed = (0x03, CommandType.write)
-    get_speed = (0x04, CommandType.read)
+    stop = (0x00, CommandType.write, ">I")
+    status = (0x01, CommandType.read, ">Iccccc")
+    move = (0x10, CommandType.write, ">I")
+    setup = (0x02, CommandType.write, ">I")
+    set_speed = (0x03, CommandType.write, ">II")
+    get_speed = (0x04, CommandType.read, ">II")
 
-    def __init__(self, value, type):
+    def __init__(self, value, type, data_format):
         self.id = value
         self.type = type
+        self.data_format = data_format
 
 
 class MotorControl:
@@ -41,15 +42,15 @@ class MotorControl:
             msg = bytearray([0, 0, 0, mc.id])
             self.port.write(msg)
             print(f'Sending: {msg}')
-            data = self.port.read(size=16)
+            data = self.port.read_until()
             print(f'what is data: {data}')
-            arbitration, data = struct.unpack(">II", data)
-            print(f'Reading: {data}')
+            unpacked = struct.unpack(mc.data_format, data)
+            print(f'arbitrary ID: {unpacked[0]}, data: {unpacked[1:]}')
         elif mc.type == CommandType.write:
             if args:
-                msg = struct.pack('>II', mc.id, int(args[0]))
+                msg = struct.pack(mc.data_format, mc.id, int(args[0]))
             else:
-                msg = struct.pack('>I', mc.id)
+                msg = struct.pack(mc.data_format, mc.id)
             print(f'Sending: {msg}')
             self.port.write(msg)
         else:
