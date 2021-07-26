@@ -13,8 +13,8 @@ black:
 flake8:
 	pipenv run python -m flake8 conftest.py src/ tests/
 
-.PHONY: lint
-lint:
+.PHONY: flint
+flint:
 	$(MAKE) black
 	$(MAKE) pylint
 	$(MAKE) flake8

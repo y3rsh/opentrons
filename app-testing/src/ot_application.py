@@ -14,7 +14,7 @@ class OtApplication:
 
     def __init__(
         self,
-        executable_path: Path = Path(os.getenv("EXECUTEABLE_PATH")),
+        executable_path: Path = Path(os.getenv("EXECUTABLE_PATH")),
         config_path: Path = Path(os.getenv("CONFIG_PATH")),
     ) -> None:
         """Initialize the Application."""

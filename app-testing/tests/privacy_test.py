@@ -1,4 +1,5 @@
 """Tests for privacy toggle."""
+import os
 import platform
 import time
 from pathlib import Path
@@ -25,10 +26,17 @@ def test_tutorial(eyes: Eyes, ot_application: OtApplication) -> None:
     locators: Locators = Locators(ot_region)
     # make sure window is active
     pyautogui.click(x=locators.top_bar_center().x, y=locators.top_bar_center().y)
-    img_path = Path(f"results/{platform.system()}-startup.png")
-    pyautogui.screenshot(img_path, region=ot_region.screenshot_region)
+    img_path_start = Path(f"results/{platform.system()}-startup.png")
+    pyautogui.screenshot(img_path_start, region=ot_region.screenshot_region)
+    time_to_wait = 3
+    time_counter = 0
+    while not os.path.exists(img_path_start):
+        time.sleep(1)
+        time_counter += 1
+        if time_counter > time_to_wait:
+            break
     # Visual checkpoint #1.
-    eyes.check_image(Image.open(img_path))
+    eyes.check_image(Image.open(img_path_start))
     # click the more menu
     pyautogui.click(x=locators.more_menu().x, y=locators.more_menu().y)
     time.sleep(1)
