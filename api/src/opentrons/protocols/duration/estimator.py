@@ -6,7 +6,7 @@ class DurationEstimator:
         pass
 
     def get_total_duration(self) -> float:
-        return 0
+        return 2424
 
     def on_message(self, message: types.CommandMessage) -> None:
         pass
