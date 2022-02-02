@@ -8,6 +8,8 @@ jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    env:
+      NGROK_TOKEN : ${{ secrets.NGROK_TOKEN }}
     steps:
       - uses: "actions/setup-python@v2"
         with:
