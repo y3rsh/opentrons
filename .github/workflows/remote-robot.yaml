@@ -1,0 +1,20 @@
+name: Github Runner Robot
+on:
+  push:
+    branches:
+      - "github-runner-robot"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: "actions/setup-python@v2"
+        with:
+          python-version: "3.7"
+      - name: Check out repository code.
+        uses: actions/checkout@v2
+      - name: Run docker robot
+        run: docker-compose up -d
+      - name: Setup tmate session
+        uses: mxschmitt/action-tmate@v3
