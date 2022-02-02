@@ -21,4 +21,3 @@ jobs:
         with:
           protocol: http
           port: 31950
-          server: http://localhost
