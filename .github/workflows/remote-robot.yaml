@@ -16,5 +16,7 @@ jobs:
         uses: actions/checkout@v2
       - name: Run docker robot
         run: docker-compose up -d
-      - name: Setup tmate session
-        uses: mxschmitt/action-tmate@v3
+      - uses: apogiatzis/ngrok-tunneling-action@v0.1.4
+        with:
+          port: 31950
+          ngrok_authtoken: ${{ secrets.NGROK_AUTHTOKEN }}
