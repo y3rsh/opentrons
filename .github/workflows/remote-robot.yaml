@@ -21,6 +21,8 @@ jobs:
       - name: Run establish a ngrok tunnel
         uses: vmactions/ngrok-tunnel@v0.0.1
         with:
-          timeout: 1h
           protocol: http
           port: 31950
+      - name: Sleep for 900 seconds
+        run: sleep 900s
+        shell: bash
