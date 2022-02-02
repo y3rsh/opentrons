@@ -16,7 +16,9 @@ jobs:
         uses: actions/checkout@v2
       - name: Run docker robot
         run: docker-compose up -d
-      - uses: apogiatzis/ngrok-tunneling-action@v0.1.4
+      - name: Run establish a ngrok tunnel
+        uses: vmactions/ngrok-tunnel@v0.0.1
         with:
+          protocol: http
           port: 31950
-          ngrok_authtoken: ${{ secrets.NGROK_AUTHTOKEN }}
+          server: http://localhost
