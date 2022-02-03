@@ -11,6 +11,10 @@ jobs:
     env:
       NGROK_TOKEN : ${{ secrets.NGROK_AUTHTOKEN }}
     steps:
+      - name: Install network-manager tool
+        run: |
+          sudo apt-get update
+          sudo apt-get install network-manager
       - uses: "actions/setup-python@v2"
         with:
           python-version: "3.7"
