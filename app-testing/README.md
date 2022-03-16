@@ -14,6 +14,8 @@ Slices of the tests will be selected as candidates for automation and then perfo
 2. Install the Opentrons application on your machine.
    1. https://opentrons.com/ot-app/
    2. This could also be done by building the installer on a branch and installing the App.
+      1. for Mac
+         1. `make -C app-shell dist-osx`
 3. Install Chromedriver
    1. in the app-testing directory
       1. `sudo ./ci-tools/mac_get_chromedriver.sh 13.1.8` per the version of electron in the root package.json for electron

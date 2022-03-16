@@ -5,9 +5,14 @@ from pathlib import Path
 from typing import Dict
 import pytest
 from dotenv import load_dotenv, find_dotenv
+from rich.console import Console
+from rich import pretty, traceback
 from selenium.webdriver.chrome.options import Options
 
 collect_ignore_glob = ["files/**/*.py"]
+
+pretty.install()
+traceback.install()
 
 logger = logging.getLogger(__name__)
 
@@ -65,3 +70,7 @@ def test_protocols() -> Dict[str, Path]:
             "files/protocol/json/gen1_pipette.json",
         ),
     }
+
+@pytest.fixture(scope="session")
+def console() -> Console:
+    return Console(log_time=True)

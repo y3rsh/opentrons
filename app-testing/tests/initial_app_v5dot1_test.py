@@ -2,8 +2,10 @@
 import logging
 import os
 from pathlib import Path
+import time
 import pytest
 
+from rich.console import Console
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 
@@ -15,10 +17,9 @@ from src.pages.robot_page import RobotPage
 from src.resources.ot_robot import OtRobot
 from src.resources.ot_application import OtApplication
 
-logger = logging.getLogger(__name__)
 
-@pytest.mark.v5dot0
-def test_initial_load_robot_available(chrome_options: Options) -> None:
+@pytest.mark.v5dot1
+def test_initial_load_robot_available_v5dot1(chrome_options: Options, console: Console) -> None:
     """Test the initial load of the app with a docker or dev mode emulated robot."""
     robot = OtRobot()
     # expecting robot
@@ -27,12 +28,15 @@ def test_initial_load_robot_available(chrome_options: Options) -> None:
     os.environ["OT_APP_ANALYTICS__SEEN_OPT_IN"] = "true"
     # app should look on localhost for robots
     os.environ["OT_APP_DISCOVERY__CANDIDATES"] = "localhost"
+    # app should use the __DEV__ Hierarchy Reorganization
+    os.environ["OT_APP_DEV_INTERNAL__hierarchyReorganization"] = "true"
     # Start chromedriver with our options and use the
     # context manager to ensure it quits.
     with webdriver.Chrome(options=chrome_options) as driver:
-        logger.debug(f"driver capabilities {driver.capabilities}")
+        console.print("Driver Capabilities.")
+        console.print(driver.capabilities)
         # Each chromedriver instance will have its own user data store.
-        # Instantiate the model of the application with teh path to the
+        # Instantiate the model of the application with the path to the
         # config.json
         ot_application = OtApplication(
             Path(f"{driver.capabilities['chrome']['userDataDir']}/config.json")
@@ -40,7 +44,9 @@ def test_initial_load_robot_available(chrome_options: Options) -> None:
         # Add the value to the config to ignore app updates.
         ot_application.config["alerts"]["ignored"] = ["appUpdateAvailable"]
         ot_application.write_config()
-        # Instantiate the page object for the RobotsList.
+        time.sleep(10)
+        
+        """ # Instantiate the page object for the RobotsList.
         robots_list = RobotsList(driver)
         # toggle the DEV robot
         if not robots_list.is_robot_toggle_active(RobotsList.DEV):
@@ -54,7 +60,7 @@ def test_initial_load_robot_available(chrome_options: Options) -> None:
         # Click on the pipettes link.
         robots_list.get_robot_pipettes_link(RobotsList.DEV).click()
         # Click on the modules link.
-        robots_list.get_robot_modules_link(RobotsList.DEV).click()
+        robots_list.get_robot_modules_link(RobotsList.DEV).click() """
 
 @pytest.mark.v5dot0
 def test_initial_load_no_robot(chrome_options: Options) -> None:
