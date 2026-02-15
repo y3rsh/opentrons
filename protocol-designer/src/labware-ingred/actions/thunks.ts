@@ -228,11 +228,17 @@ export const deleteContainer: (
   const labwareEntities = getLabwareEntities(state)
   const deckSetup = getDeckSetupForActiveItem(state)
   const { modules, labware } = deckSetup
+  const labwareOnDeck = labware[labwareId]
+
+  if (labwareOnDeck == null || labwareEntities[labwareId] == null) {
+    return
+  }
+
   const isLabwareOnHopper =
     stacker != null ||
-    labware[labwareId].stack.includes(HOPPER_STACKER_LOCATION)
+    labwareOnDeck.stack.includes(HOPPER_STACKER_LOCATION)
   const labwareSlot =
-    stacker?.slot ?? getSlotInLocationStack(labware[labwareId].stack)
+    stacker?.slot ?? getSlotInLocationStack(labwareOnDeck.stack)
   const moduleOnSlot =
     stacker ??
     Object.values(modules).find(

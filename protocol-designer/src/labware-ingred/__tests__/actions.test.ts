@@ -7,16 +7,22 @@ import {
   fixture_tiprack_10_ul,
 } from '@opentrons/shared-data/labware/fixtures/2'
 
+import { getDeckSetupForActiveItem } from '/protocol-designer/top-selectors/labware-locations'
+
 import { getRobotType } from '../../file-data/selectors'
 import { getLabwareDefsByURI } from '../../labware-defs/selectors'
-import { getInitialDeckSetup } from '../../step-forms/selectors'
+import {
+  getInitialDeckSetup,
+  getLabwareEntities,
+} from '../../step-forms/selectors'
 import { getLabwareNicknamesById } from '../../ui/labware/selectors'
 import { uuid } from '../../utils'
-import { createContainer, renameLabware } from '../actions'
+import { createContainer, deleteContainer, renameLabware } from '../actions'
 import { getNextAvailableDeckSlot, getNextNickname } from '../utils'
 
 import type { LabwareDefinition2 } from '@opentrons/shared-data'
 
+vi.mock('/protocol-designer/top-selectors/labware-locations')
 vi.mock('../../labware-defs/selectors')
 vi.mock('../../step-forms/selectors')
 vi.mock('../../ui/labware/selectors')
@@ -279,5 +285,77 @@ describe('createContainer', () => {
       createContainer({ labwareDefURIStack: ['someLabwareDefURI'], slot: '4' })
     )
     expect(store.getActions()).toEqual(expectedActions)
+  })
+})
+
+describe('deleteContainer', () => {
+  it('should not throw when labware is not found in deck setup', () => {
+    const store: any = mockStore({})
+
+    vi.mocked(getLabwareEntities).mockReturnValue({})
+    vi.mocked(getDeckSetupForActiveItem).mockReturnValue({
+      labware: {},
+      modules: {},
+      pipettes: {},
+      additionalEquipmentOnDeck: {},
+    })
+
+    store.dispatch(deleteContainer({ labwareId: 'nonExistentLabwareId' }))
+    expect(store.getActions()).toEqual([])
+  })
+
+  it('should not throw when labwareEntities does not contain the labwareId', () => {
+    const store: any = mockStore({})
+
+    vi.mocked(getLabwareEntities).mockReturnValue({})
+    vi.mocked(getDeckSetupForActiveItem).mockReturnValue({
+      labware: {
+        someLabwareId: {
+          id: 'someLabwareId',
+          stack: ['1'],
+          def: fixture_96_plate as LabwareDefinition2,
+        },
+      },
+      modules: {},
+      pipettes: {},
+      additionalEquipmentOnDeck: {},
+    })
+
+    store.dispatch(deleteContainer({ labwareId: 'someLabwareId' }))
+    expect(store.getActions()).toEqual([])
+  })
+
+  it('should dispatch DELETE_CONTAINER when labware exists in both deck setup and entities', () => {
+    const store: any = mockStore({})
+
+    vi.mocked(getLabwareEntities).mockReturnValue({
+      someLabwareId: {
+        id: 'someLabwareId',
+        labwareDefURI: 'someLabwareDefURI',
+        def: fixture_96_plate as LabwareDefinition2,
+        pythonName: 'well_plate_1',
+        displayCategory: 'wellPlate',
+      },
+    })
+    vi.mocked(getDeckSetupForActiveItem).mockReturnValue({
+      labware: {
+        someLabwareId: {
+          id: 'someLabwareId',
+          stack: ['1'],
+          def: fixture_96_plate as LabwareDefinition2,
+        },
+      },
+      modules: {},
+      pipettes: {},
+      additionalEquipmentOnDeck: {},
+    })
+
+    store.dispatch(deleteContainer({ labwareId: 'someLabwareId' }))
+    expect(store.getActions()).toEqual([
+      {
+        type: 'DELETE_CONTAINER',
+        payload: { labwareId: 'someLabwareId' },
+      },
+    ])
   })
 })
